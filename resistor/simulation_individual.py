@@ -7,23 +7,20 @@ from src import *
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description="Random Fuse Network - Resistor: Individual Simulation")
-    parser.add_argument("--length", "--l", type=int, required=True, help="Number of Vertical/Horizonatal Bonds per column >= 10")
+    parser.add_argument("--length", "--l", type=int, required=True, help="Number of Vertical/Horizonatal Bonds per Column/Row >= 3")
     parser.add_argument("--width", "--w", type=float, required=True, help="Width of Random Uniform Distribution of Threshold Voltage Drops ∈ [0, 2]")
     parser.add_argument("--seed", "--s", type=int, required=True, help="Seed Number ∈ [0, 4294967295]")
     parser.add_argument("--saveEdgeVolts", "--v", action="store_true", help="[Maximal Saving] Collect and Save EdgeVolts")
-    parser.add_argument("--saveOnlyAvalancheSize", "--a", action="store_true", help="[Minimal Saving] Save Only Avalanche Size")
     return parser.parse_args()
 
 
 def ValidateArgs(args):
-    if not (args.length >= 10):
-        raise ValueError("length >= 10")
+    if not (args.length >= 3):
+        raise ValueError("length >= 3")
     if not (0 <= args.width <= 2):
         raise ValueError("width ∈ [0, 2]")
     if not (0 <= args.seed <= 4294967295):
         raise ValueError("seed ∈ [0, 4294967295]")
-    if args.saveEdgeVolts and args.saveOnlyAvalancheSize:
-        raise ValueError("choose only one saving option: minimal (--a) / maximal (--v)")
 
 
 def SetPath(length, width, seed, saveEdgeVolts):
@@ -61,12 +58,11 @@ def SaveResult(filePath, failure, saveEdgeVolts):
             np.save(f"{filePath}dataRawEdgeVolts.npy", np.array(failure.dataRawEdgeVolts, dtype=np.float16))
 
 
-def Main(length, width, seed, saveEdgeVolts, saveOnlyAvalancheSize):
+def Main(length, width, seed, saveEdgeVolts):
     # saving initialization
-    if not saveOnlyAvalancheSize:
-        filePath = SetPath(length, width, seed, saveEdgeVolts)
-        if not filePath:
-            return
+    filePath = SetPath(length, width, seed, saveEdgeVolts)
+    if not filePath:
+        return
 
     # instantiation
     edgeList = EdgeList(length=length)
@@ -77,7 +73,7 @@ def Main(length, width, seed, saveEdgeVolts, saveOnlyAvalancheSize):
 
     # breakdown simulation
     # 1st bond breaking [t=0]
-    Compute = equation.ComputeMmd
+    Compute = equation.ComputeMmdYesEdgeVolts if saveEdgeVolts else equation.ComputeMmdNoEdgeVolts
     IterationAlgorithm = failure.IterAlgoYesEdgeVoltsInit if saveEdgeVolts else failure.IterAlgoNoEdgeVoltsInit
     Compute()
     IterationAlgorithm()
@@ -89,18 +85,15 @@ def Main(length, width, seed, saveEdgeVolts, saveOnlyAvalancheSize):
         IterationAlgorithm()
 
     # (length+1)th ~ (macroscopic failure) bond breaking [t=(length) ~ t=(total number of broken bonds-1)]
-    Compute = equation.ComputeAmd
+    Compute = equation.ComputeAmdYesEdgeVolts if saveEdgeVolts else equation.ComputeAmdNoEdgeVolts
     while Compute():
         IterationAlgorithm()
     
     # saving execution
-    if saveOnlyAvalancheSize:
-        print(length, width, seed, len(failure.idxBrokenEdges))
-        return
     SaveResult(filePath, failure, saveEdgeVolts)
 
 
 if __name__ == "__main__":
     args = ParseArgs()
     ValidateArgs(args)
-    Main(args.length, args.width, args.seed, args.saveEdgeVolts, args.saveOnlyAvalancheSize)
+    Main(args.length, args.width, args.seed, args.saveEdgeVolts)

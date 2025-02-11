@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.sparse import csc_array
 
 from src.edge_list import EdgeList
 from src.matrix import Matrix
@@ -15,8 +14,10 @@ class Failure:
         self.equation = equation
         self.edgeVolts = np.empty(self.edgeList.numEdge)
         self.idxBrokenEdges = []
+        self.idxLeafEdges = []
         self.extVolts = []
         self.dataRawEdgeVolts = []
+        self.equation.GetFailure(self) # lazy initialization for rare case: a broken leaf edge
 
 
     def _GenerateEdgeVolts(self):
@@ -34,22 +35,21 @@ class Failure:
     def _UpdateMatCond(self, idxBrokenEdge):
         idxNode1, idxNode2 = self.edgeList.edges[idxBrokenEdge]
         idxNode1New, idxNode2New = idxNode1 - self.edgeList.length + 1, idxNode2 - self.edgeList.length + 1
+        matCond = self.matrix.matCond
 
         if idxNode2New <= self.edgeList.numNodeMid:
-            data = np.array([-1, -1, 1, 1], dtype=np.int16)
             if idxNode1New > 0:
-                row = np.array([idxNode1New, idxNode2New, idxNode1New, idxNode2New], dtype=np.int32)
-                col = np.array([idxNode1New, idxNode2New, idxNode2New, idxNode1New], dtype=np.int32)
+                matCond[idxNode1New, idxNode1New] -= 1
+                matCond[idxNode2New, idxNode2New] -= 1
+                matCond[idxNode1New, idxNode2New] += 1
+                matCond[idxNode2New, idxNode1New] += 1
             else:
-                row = np.array([0, idxNode2New, 0, idxNode2New], dtype=np.int32)
-                col = np.array([0, idxNode2New, idxNode2New, 0], dtype=np.int32)
+                matCond[0, 0] -= 1
+                matCond[idxNode2New, idxNode2New] -= 1
+                matCond[0, idxNode2New] += 1
+                matCond[idxNode2New, 0] += 1
         else:
-            row = np.array([idxNode1New], dtype=np.int32)
-            col = np.array([idxNode1New], dtype=np.int32)
-            data = np.array([-1], dtype=np.int16)
-        
-        matCondDelta = csc_array((data, (row, col)), shape=(self.edgeList.sizeMatCond, self.edgeList.sizeMatCond))
-        self.matrix.matCond += matCondDelta
+                matCond[idxNode1New, idxNode1New] -= 1
 
 
     def IterAlgoYesEdgeVoltsInit(self):
@@ -89,6 +89,7 @@ class Failure:
         self._GenerateEdgeVolts()
         edgeStresses = self.edgeVolts - self.randList.randThrVolts
         edgeStresses[self.idxBrokenEdges] = -1e10
+        edgeStresses[self.idxLeafEdges] = -1e10 
         idxBrokenEdge = int(np.argmax(edgeStresses))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 
@@ -109,6 +110,7 @@ class Failure:
         self._GenerateEdgeVolts()
         edgeStresses = self.edgeVolts - self.randList.randThrVolts
         edgeStresses[self.idxBrokenEdges] = -1e10
+        edgeStresses[self.idxLeafEdges] = -1e10 
         idxBrokenEdge = int(np.argmax(edgeStresses))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 

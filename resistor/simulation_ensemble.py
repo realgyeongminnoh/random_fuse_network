@@ -8,7 +8,7 @@ from src import *
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description="Random Fuse Network - Resistor: Ensemble Simulation")
-    parser.add_argument("--length", "--l", type=int, required=True, help="Number of Vertical/Horizonatal Bonds per column")
+    parser.add_argument("--length", "--l", type=int, required=True, help="Number of Vertical/Horizonatal Bonds per Column/Row >= 3")
     parser.add_argument("--width", "--w", type=float, required=True, help="Width of Random Uniform Distribution of Threshold Voltage Drops ∈ [0, 2]")
     parser.add_argument("--seedMin", "--smin", type=int, required=True, help="Smallest Seed Number >= 0: seeds = [seedMin, seedMin+1, ..., seedMax-1, seedMax]")
     parser.add_argument("--seedMax", "--smax", type=int, required=True, help="Greatest Seed Number <= 4294967295: seeds = [seedMin, seedMin+1, ..., seedMax-1, seedMax]")    
@@ -19,8 +19,8 @@ def ParseArgs():
 
 
 def ValidateArgs(args):
-    if not (args.length >= 10):
-        raise ValueError("length >= 10")
+    if not (args.length >= 3):
+        raise ValueError("length >= 3")
     if not (0 <= args.width <= 2):
         raise ValueError("width ∈ [0, 2]")
     if not (args.seedMin >= 0): 
@@ -76,7 +76,7 @@ def ParallelJob(seed):
 
     # breakdown simulation
     # 1st bond breaking [t=0]
-    Compute = equation.ComputeMmd
+    Compute = equation.ComputeMmdYesEdgeVolts if saveEdgeVoltsGlobal else equation.ComputeMmdNoEdgeVolts
     IterationAlgorithm = failure.IterAlgoYesEdgeVoltsInit if saveEdgeVoltsGlobal else failure.IterAlgoNoEdgeVoltsInit
     Compute()
     IterationAlgorithm()
@@ -88,7 +88,7 @@ def ParallelJob(seed):
         IterationAlgorithm()
 
     # (length+1)th ~ (macroscopic failure) bond breaking [t=(length) ~ t=(total number of broken bonds-1)]
-    Compute = equation.ComputeAmd
+    Compute = equation.ComputeAmdYesEdgeVolts if saveEdgeVoltsGlobal else equation.ComputeAmdNoEdgeVolts
     while Compute():
         IterationAlgorithm()
 
