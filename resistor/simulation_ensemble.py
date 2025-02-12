@@ -12,8 +12,8 @@ def ParseArgs():
     parser.add_argument("--width", "--w", type=float, required=True, help="Width of Random Uniform Distribution of Threshold Voltage Drops ∈ [0, 2]")
     parser.add_argument("--seedMin", "--smin", type=int, required=True, help="Smallest Seed Number >= 0: seeds = [seedMin, seedMin+1, ..., seedMax-1, seedMax]")
     parser.add_argument("--seedMax", "--smax", type=int, required=True, help="Greatest Seed Number <= 4294967295: seeds = [seedMin, seedMin+1, ..., seedMax-1, seedMax]")    
-    parser.add_argument("--saveEdgeVolts", "--v", action="store_true", help="[Maximal Saving] Collect and Save EdgeVolts")
-    parser.add_argument("--saveOnlyAvalancheSize", "--a", action="store_true", help="[Minimal Saving] Save Only Avalanche Size")
+    parser.add_argument("--saveEdgeVolts", "--v", action="store_true", help="[Maximal Saving] Collect and Save edgeVolts")
+    parser.add_argument("--saveOnlyExtVolts", "--e", action="store_true", help="[Minimal Saving] Save Only extVolts")
     parser.add_argument("--forceCpu", "--c", type=int, required=False, help="Force a Fixed Number of CPU Processors")
     return parser.parse_args()
 
@@ -29,7 +29,7 @@ def ValidateArgs(args):
         raise ValueError("seedMax <= 4294967295")
     if not (args.seedMin <= args.seedMax):
         raise ValueError("seedMin <= seedMax")
-    if args.saveEdgeVolts and args.saveOnlyAvalancheSize:
+    if args.saveEdgeVolts and args.saveOnlyExtVolts:
         raise ValueError("choose only one saving option: minimal (--a) / maximal (--v)")
     if (args.forceCpu is not None) and not (1 <= args.forceCpu <= os.cpu_count()):
         raise ValueError("designated processor number must not exceed the number of processors in your computer")
@@ -43,27 +43,28 @@ def SetSharedPath(length, width, seedMin, seedMax):
     )
     os.makedirs(sharedFilePath, exist_ok=True)
 
-    if not saveOnlyAvalancheSizeGlobal:
-        for seed in range(seedMin, seedMax + 1):
-            filePath = sharedFilePath + f"{seed}/"
-            os.makedirs(filePath, exist_ok=True)
+    for seed in range(seedMin, seedMax + 1):
+        filePath = sharedFilePath + f"{seed}/"
+        os.makedirs(filePath, exist_ok=True)
 
     return sharedFilePath
 
 
-def SaveResult(filePath, failure, saveEdgeVolts):
-    np.save(f"{filePath}idxBrokenEdges.npy", np.array(failure.idxBrokenEdges, dtype=np.int32))
+def SaveResult(filePath, failure):
+    if not saveOnlyExtVoltsGlobal:
+        np.save(f"{filePath}idxBrokenEdges.npy", np.array(failure.idxBrokenEdges, dtype=np.int32))
+
     if failure.extVolts[-1] < 6.5505e4:
         np.save(f"{filePath}extVolts.npy", np.array(failure.extVolts, dtype=np.float16))
-        if saveEdgeVolts:
+        if saveEdgeVoltsGlobal:
             np.save(f"{filePath}dataRawEdgeVolts.npy", np.array(failure.dataRawEdgeVolts, dtype=np.float16))
     elif failure.extVolts[-1] < 3.4028236e38:
         np.save(f"{filePath}extVolts.npy", np.array(failure.extVolts, dtype=np.float32))
-        if saveEdgeVolts:
+        if saveEdgeVoltsGlobal:
             np.save(f"{filePath}dataRawEdgeVolts.npy", np.array(failure.dataRawEdgeVolts, dtype=np.float32))
     else:
         np.save(f"{filePath}extVolts.npy", np.array(failure.extVolts, dtype=np.float64))
-        if saveEdgeVolts:
+        if saveEdgeVoltsGlobal:
             np.save(f"{filePath}dataRawEdgeVolts.npy", np.array(failure.dataRawEdgeVolts, dtype=np.float64))
 
 
@@ -93,17 +94,15 @@ def ParallelJob(seed):
         IterationAlgorithm()
 
     # saving execution
-    if saveOnlyAvalancheSizeGlobal:
-        return len(failure.idxBrokenEdges)
-    SaveResult(sharedFilePathGlobal + f"{seed}/", failure, saveEdgeVoltsGlobal)
+    SaveResult(sharedFilePathGlobal + f"{seed}/", failure)
 
 
-def Main(length, width, seedMin, seedMax, saveEdgeVolts, saveOnlyAvalancheSize, forceCpu):
+def Main(length, width, seedMin, seedMax, saveEdgeVolts, saveOnlyExtVolts, forceCpu):
     # globalization & saving initialization - shared across seeds
     global lengthGlobal, widthGlobal
-    global saveEdgeVoltsGlobal, saveOnlyAvalancheSizeGlobal, sharedFilePathGlobal
+    global saveEdgeVoltsGlobal, saveOnlyExtVoltsGlobal, sharedFilePathGlobal
     lengthGlobal, widthGlobal = length, width
-    saveEdgeVoltsGlobal, saveOnlyAvalancheSizeGlobal = saveEdgeVolts, saveOnlyAvalancheSize
+    saveEdgeVoltsGlobal, saveOnlyExtVoltsGlobal = saveEdgeVolts, saveOnlyExtVolts
     sharedFilePathGlobal = SetSharedPath(length, width, seedMin, seedMax)
 
     # instantiation - shared across seeds
@@ -115,14 +114,10 @@ def Main(length, width, seedMin, seedMax, saveEdgeVolts, saveOnlyAvalancheSize, 
     maxWorkers = (seedMax - seedMin + 1) if (seedMax - seedMin + 1) <= os.cpu_count() else os.cpu_count()
     maxWorkers = forceCpu if forceCpu else maxWorkers
     with ProcessPoolExecutor(max_workers=maxWorkers) as executor:
-        results = list(executor.map(ParallelJob, range(seedMin, seedMax + 1)))
-
-    # saving exection
-    if saveOnlyAvalancheSize:
-        np.save(sharedFilePathGlobal + f"avalanche_size_seeds_{seedMin}_{seedMax}", np.array(results, dtype=np.int32))
+        executor.map(ParallelJob, range(seedMin, seedMax + 1))
 
 
 if __name__ == "__main__":
     args = ParseArgs()
     ValidateArgs(args)
-    Main(args.length, args.width, args.seedMin, args.seedMax, args.saveEdgeVolts, args.saveOnlyAvalancheSize, args.forceCpu)
+    Main(args.length, args.width, args.seedMin, args.seedMax, args.saveEdgeVolts, args.saveOnlyExtVolts, args.forceCpu)

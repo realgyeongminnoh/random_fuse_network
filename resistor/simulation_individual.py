@@ -44,6 +44,7 @@ def SetPath(length, width, seed, saveEdgeVolts):
 
 def SaveResult(filePath, failure, saveEdgeVolts):
     np.save(f"{filePath}idxBrokenEdges.npy", np.array(failure.idxBrokenEdges, dtype=np.int32))
+    
     if failure.extVolts[-1] > 3.4028235e38:
         np.save(f"{filePath}extVolts.npy", np.array(failure.extVolts, dtype=np.float64))
         if saveEdgeVolts:
