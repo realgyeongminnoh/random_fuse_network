@@ -43,8 +43,8 @@ class Equation:
 
 
     def ComputeMmdYesEdgeVolts(self):
-        self.vectorRhs[-1] = self.extVolt
         try:
+            self.vectorRhs[-1] = self.extVolt
             self.nodeVolts = spsolve(self.matrix.matCond, self.vectorRhs, permc_spec="MMD_AT_PLUS_A")
         except: # singular matrix iff previously broken edge was leaf
             idxLeafEdge = self.failure.idxBrokenEdges.pop()
@@ -65,8 +65,8 @@ class Equation:
            
 
     def ComputeMmdNoEdgeVolts(self):
-        self.vectorRhs[-1] = self.extVolt
         try:
+            self.vectorRhs[-1] = self.extVolt
             self.nodeVolts = spsolve(self.matrix.matCond, self.vectorRhs, permc_spec="MMD_AT_PLUS_A")
         except:
             idxLeafEdge = self.failure.idxBrokenEdges.pop()
@@ -83,8 +83,8 @@ class Equation:
 
 
     def ComputeAmdYesEdgeVolts(self):
-        self.vectorRhs[-1] = self.extVolt
         try:
+            self.vectorRhs[-1] = self.extVolt
             self.nodeVolts = spsolve(self.matrix.matCond, self.vectorRhs, permc_spec="COLAMD")
             return np.abs(self.nodeVolts[-1]) > 1e-5
         except:
@@ -103,8 +103,8 @@ class Equation:
 
 
     def ComputeAmdNoEdgeVolts(self):
-        self.vectorRhs[-1] = self.extVolt
         try:
+            self.vectorRhs[-1] = self.extVolt
             self.nodeVolts = spsolve(self.matrix.matCond, self.vectorRhs, permc_spec="COLAMD")
             return np.abs(self.nodeVolts[-1]) > 1e-5
         except:
