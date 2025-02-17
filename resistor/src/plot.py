@@ -46,6 +46,7 @@ class Plot:
         self._SetPath()
         if type(failure.idxBrokenEdges) == np.ndarray:
             failure.idxBrokenEdges = failure.idxBrokenEdges.tolist()
+        if type(failure.extVolts) == np.ndarray:    
             failure.extVolts = failure.extVolts.tolist()
 
 

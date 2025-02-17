@@ -1,10 +1,13 @@
 import numpy as np
+import warnings
 
 from src.edge_list import EdgeList
 from src.matrix import Matrix
 from src.rand_list import RandList
 from src.equation import Equation
 
+
+warnings.simplefilter("ignore", category=RuntimeWarning) # ignoring division by zero cases for scalingFactors computation (edgeVolt = 0; no other cases)
 
 class Failure:
     def __init__(self, edgeList: EdgeList, matrix: Matrix, randList: RandList, equation: Equation):
@@ -54,7 +57,7 @@ class Failure:
 
     def IterAlgoYesEdgeVoltsInit(self):
         self._GenerateEdgeVolts()
-        idxBrokenEdge = int(np.argmax(self.edgeVolts - self.randList.randThrVolts))
+        idxBrokenEdge = int(np.argmin(self.randList.randThrVolts / self.edgeVolts))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
@@ -67,11 +70,13 @@ class Failure:
             self.equation.extVolt *= scalingFactor
             self.equation.nodeVolts *= scalingFactor
             self.extVolts[0] = float(self.equation.extVolt)
+        else:
+            print(self.edgeList.length, self.randList.width, self.randList.seed)
 
 
     def IterAlgoNoEdgeVoltsInit(self):
         self._GenerateEdgeVolts()
-        idxBrokenEdge = int(np.argmax(self.edgeVolts - self.randList.randThrVolts))
+        idxBrokenEdge = int(np.argmin(self.randList.randThrVolts / self.edgeVolts))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
@@ -83,44 +88,50 @@ class Failure:
             self.equation.extVolt *= scalingFactor
             self.equation.nodeVolts *= scalingFactor
             self.extVolts[0] = float(self.equation.extVolt)
+        else:
+            print(self.edgeList.length, self.randList.width, self.randList.seed)
 
 
     def IterAlgoYesEdgeVolts(self):
         self._GenerateEdgeVolts()
-        edgeStresses = self.edgeVolts - self.randList.randThrVolts
-        edgeStresses[self.idxBrokenEdges] = -1e10
-        edgeStresses[self.idxLeafEdges] = -1e10 
-        idxBrokenEdge = int(np.argmax(edgeStresses))
+        scalingFactors = self.randList.randThrVolts / self.edgeVolts
+        scalingFactors[self.idxBrokenEdges] = 1e10
+        scalingFactors[self.idxLeafEdges] = 1e10
+        idxBrokenEdge = int(np.argmin(scalingFactors))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
+        scalingFactor = scalingFactors[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
         self.idxBrokenEdges.append(idxBrokenEdge)
         self.extVolts.append(self.extVolts[-1])
         self.dataRawEdgeVolts.append(self.edgeVolts.copy())
 
-        if edgeStresses[idxBrokenEdge] < 0:
+        if scalingFactor > 1:
             if edgeVoltBrokenEdge > 1e-10:
-                scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / edgeVoltBrokenEdge
                 self.equation.extVolt *= scalingFactor
                 self.equation.nodeVolts *= scalingFactor
                 self.extVolts[-1] = float(self.equation.extVolt)
+            else:
+                print(self.edgeList.length, self.randList.width, self.randList.seed)
 
 
     def IterAlgoNoEdgeVolts(self):
         self._GenerateEdgeVolts()
-        edgeStresses = self.edgeVolts - self.randList.randThrVolts
-        edgeStresses[self.idxBrokenEdges] = -1e10
-        edgeStresses[self.idxLeafEdges] = -1e10 
-        idxBrokenEdge = int(np.argmax(edgeStresses))
+        scalingFactors = self.randList.randThrVolts / self.edgeVolts
+        scalingFactors[self.idxBrokenEdges] = 1e10
+        scalingFactors[self.idxLeafEdges] = 1e10
+        idxBrokenEdge = int(np.argmin(scalingFactors))
         edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
+        scalingFactor = scalingFactors[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
         self.idxBrokenEdges.append(idxBrokenEdge)
         self.extVolts.append(self.extVolts[-1])
 
-        if edgeStresses[idxBrokenEdge] < 0:
+        if scalingFactor > 1:
             if edgeVoltBrokenEdge > 1e-10:
-                scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / edgeVoltBrokenEdge
                 self.equation.extVolt *= scalingFactor
                 self.equation.nodeVolts *= scalingFactor
                 self.extVolts[-1] = float(self.equation.extVolt)
+            else:
+                print(self.edgeList.length, self.randList.width, self.randList.seed)
