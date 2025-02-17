@@ -16,7 +16,6 @@ class EdgeList:
         self.idxMapFromEdgesToEdgesDivCap = None
         self.idxMapFromEdgesDivCapToEdges = None
         self.idxMapFromEdgesToEdgesDivCond = None 
-        self.idxMapFromEdgesDivCondToEdges = None
         self._GenerateEdges()
         self._GenerateEdgesDiv()
         self._GenerateEdgesDivCapCond()
