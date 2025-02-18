@@ -84,11 +84,12 @@ class Equation:
     def ComputeMmdRfnResistorYesEdgeVolts(self):
         try:
             splu(self.matrix.matCond, permc_spec="MMD_AT_PLUS_A")
-        except:
+        except: # singular matrix iff previously broken edge was leaf
             idxLeafEdgeDivCap = self.failure.idxBrokenEdgesDivCap.pop()
             self.failure.idxLeafEdgesDivCap.append(idxLeafEdgeDivCap)
             idxLeafEdge = self.edgeList.idxMapFromEdgesDivCapToEdges[idxLeafEdgeDivCap]
-
+            
+            # undo update of previous step Iteration Algorithm of failure
             self._UndoUpdateMatDivCapComb(idxLeafEdge)
             self._UndoUpdateMatCond(idxLeafEdge)
             self.extVolt = self.failure.extVolts[-2]
@@ -97,7 +98,9 @@ class Equation:
                 self.nodeVolts *= unscalingFactor
             self.failure.dataRawEdgeVolts.pop()
 
+            # redo previous step Iteration Algorithm of failure with the updated idxLeafEdges
             self.failure.IterAlgoYesEdgeVolts()
+            # redo current step Compute of equation; recurse in case of another leaf edge being broken
             self.ComputeMmdRfnResistorYesEdgeVolts()
 
 

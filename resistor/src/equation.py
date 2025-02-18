@@ -60,7 +60,7 @@ class Equation:
 
             # redo previous step Iteration Algorithm of failure with the updated idxLeafEdges
             self.failure.IterAlgoYesEdgeVolts()
-            # recursel redo current step Compute of equation 
+            # redo current step Compute of equation; recurse in case of another leaf edge being broken
             self.ComputeMmdYesEdgeVolts()
            
 

@@ -58,38 +58,30 @@ class Failure:
     def IterAlgoYesEdgeVoltsInit(self):
         self._GenerateEdgeVolts()
         idxBrokenEdge = int(np.argmin(self.randList.randThrVolts / self.edgeVolts))
-        edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
         self.idxBrokenEdges.append(idxBrokenEdge)
         self.extVolts.append(0)
         self.dataRawEdgeVolts.append(self.edgeVolts.copy())
 
-        if edgeVoltBrokenEdge > 1e-10:
-            scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / edgeVoltBrokenEdge
-            self.equation.extVolt *= scalingFactor
-            self.equation.nodeVolts *= scalingFactor
-            self.extVolts[0] = float(self.equation.extVolt)
-        else:
-            print(self.edgeList.length, self.randList.width, self.randList.seed)
+        scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / self.edgeVolts[idxBrokenEdge]
+        self.equation.extVolt *= scalingFactor
+        self.equation.nodeVolts *= scalingFactor
+        self.extVolts[0] = float(self.equation.extVolt)
 
 
     def IterAlgoNoEdgeVoltsInit(self):
         self._GenerateEdgeVolts()
         idxBrokenEdge = int(np.argmin(self.randList.randThrVolts / self.edgeVolts))
-        edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
         self.idxBrokenEdges.append(idxBrokenEdge)
         self.extVolts.append(0)
 
-        if edgeVoltBrokenEdge > 1e-10:
-            scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / edgeVoltBrokenEdge
-            self.equation.extVolt *= scalingFactor
-            self.equation.nodeVolts *= scalingFactor
-            self.extVolts[0] = float(self.equation.extVolt)
-        else:
-            print(self.edgeList.length, self.randList.width, self.randList.seed)
+        scalingFactor = self.randList.randThrVolts[idxBrokenEdge] / self.edgeVolts[idxBrokenEdge]
+        self.equation.extVolt *= scalingFactor
+        self.equation.nodeVolts *= scalingFactor
+        self.extVolts[0] = float(self.equation.extVolt)
 
 
     def IterAlgoYesEdgeVolts(self):
@@ -98,7 +90,6 @@ class Failure:
         scalingFactors[self.idxBrokenEdges] = 1e10
         scalingFactors[self.idxLeafEdges] = 1e10
         idxBrokenEdge = int(np.argmin(scalingFactors))
-        edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
         scalingFactor = scalingFactors[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
@@ -107,12 +98,9 @@ class Failure:
         self.dataRawEdgeVolts.append(self.edgeVolts.copy())
 
         if scalingFactor > 1:
-            if edgeVoltBrokenEdge > 1e-10:
-                self.equation.extVolt *= scalingFactor
-                self.equation.nodeVolts *= scalingFactor
-                self.extVolts[-1] = float(self.equation.extVolt)
-            else:
-                print(self.edgeList.length, self.randList.width, self.randList.seed)
+            self.equation.extVolt *= scalingFactor
+            self.equation.nodeVolts *= scalingFactor
+            self.extVolts[-1] = float(self.equation.extVolt)
 
 
     def IterAlgoNoEdgeVolts(self):
@@ -121,7 +109,6 @@ class Failure:
         scalingFactors[self.idxBrokenEdges] = 1e10
         scalingFactors[self.idxLeafEdges] = 1e10
         idxBrokenEdge = int(np.argmin(scalingFactors))
-        edgeVoltBrokenEdge = self.edgeVolts[idxBrokenEdge]
         scalingFactor = scalingFactors[idxBrokenEdge]
 
         self._UpdateMatCond(idxBrokenEdge)
@@ -129,9 +116,6 @@ class Failure:
         self.extVolts.append(self.extVolts[-1])
 
         if scalingFactor > 1:
-            if edgeVoltBrokenEdge > 1e-10:
-                self.equation.extVolt *= scalingFactor
-                self.equation.nodeVolts *= scalingFactor
-                self.extVolts[-1] = float(self.equation.extVolt)
-            else:
-                print(self.edgeList.length, self.randList.width, self.randList.seed)
+            self.equation.extVolt *= scalingFactor
+            self.equation.nodeVolts *= scalingFactor
+            self.extVolts[-1] = float(self.equation.extVolt)
