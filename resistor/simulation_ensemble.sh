@@ -19,7 +19,7 @@ for L in "${L_VALUES[@]}"; do
     echo "simunation: (L, W) = ($L, $W)" 
     SECONDS=0
 
-    python -u ./simulation_ensemble.py --l $L --w $W --smin $SMIN --smax $SMAX >> output.txt
+    python -u ./simulation_ensemble.py --l $L --w $W --smin $SMIN --smax $SMAX
 
     printf "elapsed time: %dm %ds\n" $((SECONDS / 60)) $((SECONDS % 60))
     sleep 5
@@ -28,29 +28,29 @@ done
 
 
 echo "checkpoint 1: $(date +"%H%M%S")"
-sleep 60
+# sleep 60
 
 
-L_VALUES=(50 60 70)
-W_VALUES=(0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)
-SMIN=0
-SMAX=2499
+# L_VALUES=(50 60 70)
+# W_VALUES=(0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)
+# SMIN=0
+# SMAX=2499
 
-for L in "${L_VALUES[@]}"; do
-  for W in "${W_VALUES[@]}"; do
-    echo "simunation: (L, W) = ($L, $W)" 
-    SECONDS=0
+# for L in "${L_VALUES[@]}"; do
+#   for W in "${W_VALUES[@]}"; do
+#     echo "simunation: (L, W) = ($L, $W)" 
+#     SECONDS=0
 
-    python -u ./simulation_ensemble.py --l $L --w $W --smin $SMIN --smax $SMAX >> output.txt
+#     python -u ./simulation_ensemble.py --l $L --w $W --smin $SMIN --smax $SMAX
 
-    printf "elapsed time: %dm %ds\n" $((SECONDS / 60)) $((SECONDS % 60))
-    sleep 10
-  done
-done
+#     printf "elapsed time: %dm %ds\n" $((SECONDS / 60)) $((SECONDS % 60))
+#     sleep 10
+#   done
+# done
 
 
-echo "checkpoint 2: $(date +"%H%M%S")"
-sleep 120
+# echo "checkpoint 2: $(date +"%H%M%S")"
+# sleep 120
 
 
 # L_VALUES=(80 90)
