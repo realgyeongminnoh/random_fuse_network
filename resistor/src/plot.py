@@ -168,7 +168,7 @@ class Plot:
                 print(f"Already exists: 'Breakdown.mp4'")
                 return None
 
-            images = [os.path.join(self.filePath2, f"{i}.png") for i in range(self.numBrokenEdges)]
+            images = [os.path.join(self.filePath2, f"{i}.png") for i in range(self.numBrokenEdges + 1)]
             vidHeight, vidWidth, _ = cv2.imread(images[0]).shape
             video = cv2.VideoWriter(f"{self.filePath2}Breakdown.mp4", cv2.VideoWriter_fourcc(*"mp4v"), 30, (vidWidth, vidHeight))
 
@@ -177,7 +177,7 @@ class Plot:
                 for _ in range(fpsPerGraph):
                     video.write(img)
                 os.remove(image)
-            for _ in range(30):
+            for _ in range(25):
                 video.write(img)
 
             video.release()
