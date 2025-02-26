@@ -53,12 +53,12 @@ class Plot:
     def _SetPath(self):
         self.filePath1 = f"{os.getcwd()}/data/{self.edgeList.length}/"
         self.filePath2 = self.filePath1 + f"{self.randList.width}/{self.randList.seed}/"
-        os.makedirs(self.filePath1, exist_ok=True)
-        os.makedirs(self.filePath2, exist_ok=True)
 
 
     def _Save(self, filePath, fileName, padInches, dpi: int = 300, transparent: bool = False, verbose: bool = True):
         if self.save:
+            os.makedirs(self.filePath1, exist_ok=True)
+            os.makedirs(self.filePath2, exist_ok=True)
             padInches = 0.1 if padInches is None else padInches
             plt.savefig(f"{filePath}{fileName}.png", bbox_inches="tight", pad_inches=padInches, dpi=dpi, transparent=transparent)
             if verbose:
