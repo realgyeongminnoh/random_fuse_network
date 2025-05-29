@@ -1,9 +1,2 @@
 **/__pycache__/
-**/testplace.ipynb
-**/test.py
-**/output.txt
-**/data/
-**/dataVR.npy
-**/dataNR.npy
-**/dataVRC.npy
-**/dataNRC.npy
+00_preliminary
