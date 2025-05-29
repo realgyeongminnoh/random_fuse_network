@@ -1,2 +1,5 @@
 **/__pycache__/
 00_preliminary
+.vscode
+gxx
+test**
