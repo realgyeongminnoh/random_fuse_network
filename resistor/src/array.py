@@ -2,13 +2,14 @@ import numpy as np
 
 
 class Array:
-    def __init__(self, length: int):
+    def __init__(self, length: int, mode_analysis: bool = False):
         length = int(length)
         self.length: int = length
         self.num_node: int = length ** 2 + length
         self.num_node_mid: int = self.num_node - 2 * length
         self.idx_node_bot_first_minus_one: int = self.num_node - self.length - 1
         self.num_edge: int = 2 * length ** 2 - length
+        self.mode_analysis: bool = mode_analysis
 
         self.edges: list[tuple[int, int]] = self._generate_edges()
         self._generate_idxs()
@@ -43,13 +44,16 @@ class Array:
         self.idxs_edge_mid_node1: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 0]
         self.idxs_edge_mid_node2: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 1]
 
-        # # horizontal and vertical edges
-        # length, length_minus_one = self.length, self.length - 1
+        # index lists of horizontal, vertical, pbc, horizontal except pbc edges
+        if self.mode_analysis:
+            length, length_minus_one = self.length, self.length - 1
 
-        # idxs_edge_horizontal = []
-        # for idx_edge in np.linspace(length, length * (2 * length_minus_one - 1), length_minus_one, dtype=np.int32).tolist():
-        #     idxs_edge_horizontal += [idx_edge]
-        #     idxs_edge_horizontal += (idx_edge + 2 * np.arange(0, length_minus_one) + 1).tolist()
+            idxs_edge_horizontal = []
+            for idx_edge in np.linspace(length, length * (2 * length_minus_one - 1), length_minus_one, dtype=np.int32).tolist():
+                idxs_edge_horizontal += [idx_edge]
+                idxs_edge_horizontal += (idx_edge + 2 * np.arange(0, length_minus_one) + 1).tolist()
 
-        # self.idxs_edge_horizontal = np.array(idxs_edge_horizontal, dtype=np.int32)
-        # self.idxs_edge_vertical = np.delete(np.arange(self.num_edge, dtype=np.int32), self.idxs_edge_horizontal)
+            self.idxs_edge_horizontal: np.ndarray[np.int32] = np.array(idxs_edge_horizontal, dtype=np.int32)
+            self.idxs_edge_vertical: np.ndarray[np.int32] = np.delete(np.arange(self.num_edge, dtype=np.int32), self.idxs_edge_horizontal)
+            self.idxs_edge_pbc: np.ndarray[np.int32] = (length + 1) + (2 * length) * np.arange(length - 1, dtype=np.int32)
+            self.idxs_edge_horizontal_no_pbc: np.ndarray[np.int32] = self.idxs_edge_horizontal[~np.isin(self.idxs_edge_horizontal, self.idxs_edge_pbc, assume_unique=True)]

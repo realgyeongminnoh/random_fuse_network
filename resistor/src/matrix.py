@@ -6,6 +6,9 @@ from src.array import Array
 
 
 class Matrix:
+    """
+    [ vtop | v3, v4, ..., v8 | -I_ext ] (L=3)
+    """
     def __init__(self, matrix_init: Matrix = None, array: Array = None):
         if matrix_init is None:
             self.size_cond: int = array.num_node_mid + 2
@@ -38,5 +41,5 @@ class Matrix:
                 col.extend((idx_node1_new, idx_node2_new, idx_node2_new, idx_node1_new))
                 data.extend((1, 1, -1, -1))
 
-        row, col, data = np.array(row, dtype=np.int32), np.array(col, dtype=np.int32), np.array(data, dtype=np.int16)
+        row, col, data = np.array(row, dtype=np.int32), np.array(col, dtype=np.int32), np.array(data, dtype=np.float64)
         return csc_array((data, (row, col)), shape=(self.size_cond, self.size_cond))

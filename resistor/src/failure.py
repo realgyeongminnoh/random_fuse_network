@@ -26,17 +26,20 @@ class Failure:
 
         if save_volts_profile:
             self.volts_edge_profile: list[np.ndarray[np.float64]] = []
+            self.volts_edge_signed: np.ndarray[np.float64] = np.empty(self.array.num_edge, dtype=np.float64)
+            self._compute_volts_edge = self._compute_volts_edge_save
             self._append_volts_edge_profile_scale_dynamic = self._append_volts_edge_profile_scale 
             self._append_volts_edge_profile_dynamic = self._append_volts_edge_profile
         else:
+            self._compute_volts_edge = self._compute_volts_edge_unsave
             self._append_volts_edge_profile_scale_dynamic = self._no_op1
             self._append_volts_edge_profile_dynamic = self._no_op0
 
     def _append_volts_edge_profile_scale(self, scaling_factor):
-        self.volts_edge_profile.append(self.volts_edge.copy().__imul__(scaling_factor))
+        self.volts_edge_profile.append(self.volts_edge_signed.copy().__imul__(scaling_factor))
 
     def _append_volts_edge_profile(self):
-        self.volts_edge_profile.append(self.volts_edge.copy())
+        self.volts_edge_profile.append(self.volts_edge_signed.copy())
 
     @staticmethod
     def _no_op0(): pass
@@ -50,7 +53,7 @@ class Failure:
         breaking_strengths = np.random.uniform(breaking_strengths_min_nom, breaking_strengths_max_nom, self.array.num_edge)
         return breaking_strengths
     
-    def _compute_volts_edge(self):
+    def _compute_volts_edge_unsave(self):
         array = self.array
         volts_node_mod = self.equation.volts_node[1:]
         volts_edge = self.volts_edge
@@ -58,6 +61,20 @@ class Failure:
         volts_edge[:array.length] = self.equation.volt_ext - volts_node_mod[:array.length]
         volts_edge[array.idxs_edge_bot] = volts_node_mod[array.idxs_edge_bot_node1]
         volts_edge[array.idxs_edge_mid] = volts_node_mod[array.idxs_edge_mid_node1] - volts_node_mod[array.idxs_edge_mid_node2]
+        np.abs(volts_edge, out=volts_edge)
+
+    def _compute_volts_edge_save(self):
+        "save signed volts_edge (signed according to E (treat it as a directed graph); non-pbc horizontal edges require special handling if volts_edge was to be equated to volts_cap + volts_cond)"
+        # for changing sign convention west -> east, north -> south (for visualization or etc. that do not rely on E (i -> j) order itself)
+        # np.array(failure.volts_edge_profile)[:, array.idxs_edge_horizontal_no_pbc] *= -1.0
+        array = self.array
+        volts_node_mod = self.equation.volts_node[1:]
+        volts_edge = self.volts_edge
+
+        volts_edge[:array.length] = self.equation.volt_ext - volts_node_mod[:array.length]
+        volts_edge[array.idxs_edge_bot] = volts_node_mod[array.idxs_edge_bot_node1]
+        volts_edge[array.idxs_edge_mid] = volts_node_mod[array.idxs_edge_mid_node1] - volts_node_mod[array.idxs_edge_mid_node2]
+        self.volts_edge_signed[:] = volts_edge
         np.abs(volts_edge, out=volts_edge)
     
     def _update_matrix_cond(self, idx_edge_broken):
@@ -67,17 +84,17 @@ class Failure:
 
         if idx_node2_new <= self.array.num_node_mid:
             if idx_node1_new > 0:
-                cond[idx_node1_new, idx_node1_new] -= 1
-                cond[idx_node2_new, idx_node2_new] -= 1
-                cond[idx_node1_new, idx_node2_new] += 1
-                cond[idx_node2_new, idx_node1_new] += 1
+                cond[idx_node1_new, idx_node1_new] -= 1.0
+                cond[idx_node2_new, idx_node2_new] -= 1.0
+                cond[idx_node1_new, idx_node2_new] += 1.0
+                cond[idx_node2_new, idx_node1_new] += 1.0
             else:
-                cond[0, 0] -= 1
-                cond[idx_node2_new, idx_node2_new] -= 1
-                cond[0, idx_node2_new] += 1
-                cond[idx_node2_new, 0] += 1
+                cond[0, 0] -= 1.0
+                cond[idx_node2_new, idx_node2_new] -= 1.0
+                cond[0, idx_node2_new] += 1.0
+                cond[idx_node2_new, 0] += 1.0
         else:
-            cond[idx_node1_new, idx_node1_new] -= 1
+            cond[idx_node1_new, idx_node1_new] -= 1.0
     
     def _find_edge_broken_leaf_proof(self, quantities):
         degrees = self.degrees
@@ -125,8 +142,8 @@ class Failure:
         factor_scaling = self.breaking_strengths[idx_edge_broken] / self.volts_edge[idx_edge_broken]
         self.equation.volt_ext *= factor_scaling
         self.equation.volts_node *= factor_scaling
-        self.volts_ext.append(float(self.equation.volt_ext))
         self._append_volts_edge_profile_scale_dynamic(factor_scaling)
+        self.volts_ext.append(float(self.equation.volt_ext))
 
     def break_edge(self):
         self._compute_volts_edge()
@@ -138,7 +155,6 @@ class Failure:
         if stresses_edge_neg[idx_edge_broken] <= 0:
             self._update_matrix_cond(idx_edge_broken)
             self.idxs_edge_broken.append(idx_edge_broken)
-            self.volts_ext.append(float(self.equation.volt_ext))
             self._append_volts_edge_profile_dynamic()
         
         else:
@@ -158,47 +174,6 @@ class Failure:
 
             self.equation.volt_ext *= factor_scaling
             self.equation.volts_node *= factor_scaling
-            self.volts_ext.append(float(self.equation.volt_ext))
             self._append_volts_edge_profile_scale_dynamic(factor_scaling)
 
-    # def break_edge_init(self):
-    #     self._compute_volts_edge()
-    #     idx_edge_broken = int(np.argmin(self.breaking_strengths - self.volts_edge))
-    
-    #     self._update_matrix_cond(idx_edge_broken)
-    #     self.idxs_edge_broken.append(idx_edge_broken)
-
-    #     # at first bond breaking, the external potential is scaled to the value such that the maximally stressed bond can be broken
-    #     factor_scaling = self.breaking_strengths[idx_edge_broken] / self.volts_edge[idx_edge_broken]
-    #     self.equation.volt_ext *= factor_scaling
-    #     self.equation.volts_node *= factor_scaling
-    #     self.volts_ext.append(float(self.equation.volt_ext))
-    #     self._append_volts_edge_profile_scale_dynamic(factor_scaling)
-
-    # def break_edge(self):
-    #     self._compute_volts_edge()
-    #     stresses_edge_neg = self.breaking_strengths - self.volts_edge
-    #     stresses_edge_neg[self.idxs_edge_broken] = np.inf
-    #     stresses_edge_neg[self.idxs_edge_leaf] = np.inf
-    #     idx_edge_broken = int(np.argmin(stresses_edge_neg))
-
-    #     if stresses_edge_neg[idx_edge_broken] <= 0:
-    #         self._update_matrix_cond(idx_edge_broken)
-    #         self.idxs_edge_broken.append(idx_edge_broken)
-    #         self.volts_ext.append(float(self.equation.volt_ext))
-    #         self._append_volts_edge_profile_dynamic()
-        
-    #     else:
-    #         factors_scaling = self.breaking_strengths / self.volts_edge
-    #         factors_scaling[self.idxs_edge_broken] = np.inf
-    #         factors_scaling[self.idxs_edge_leaf] = np.inf
-    #         idx_edge_broken = int(np.argmin(factors_scaling))
-    #         factor_scaling = factors_scaling[idx_edge_broken]
-
-    #         self._update_matrix_cond(idx_edge_broken)
-    #         self.idxs_edge_broken.append(idx_edge_broken)
-
-    #         self.equation.volt_ext *= factor_scaling
-    #         self.equation.volts_node *= factor_scaling
-    #         self.volts_ext.append(float(self.equation.volt_ext))
-    #         self._append_volts_edge_profile_scale_dynamic(factor_scaling)
+        self.volts_ext.append(float(self.equation.volt_ext))
