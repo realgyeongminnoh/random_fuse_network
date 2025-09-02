@@ -41,7 +41,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def get_output_dir_common(args: argparse.Namespace) -> Path:
-    output_dir_common = Path(__file__).resolve().parent / "data" / str(args.length) / str(args.width) / f"{args.cap}_{args.time}"
+    output_dir_common = Path(__file__).resolve().parent / "data" / f"{args.cap}_{args.time}" / str(args.length) / str(args.width)
     output_dir_common.mkdir(parents=True, exist_ok=True)
 
     for seed in range(args.seed_min, args.seed_max + 1):
