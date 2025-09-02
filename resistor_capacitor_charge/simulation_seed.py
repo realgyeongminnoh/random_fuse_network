@@ -57,7 +57,7 @@ def save_result(output_dir: Path, failure: Failure) -> None:
 
 def main(length: int, width: float, seed: int, save_volts_profile: bool, val_cap: float, time_step: float) -> None:
     # initialization
-    array = Array(length=length)
+    array = Array(length=length, mode_analysis=False)
     matrix = Matrix(matrix_init=None, array=array, val_cap=val_cap, time_step=time_step)
     equation = Equation(array=array, matrix=matrix, save_volts_profile=save_volts_profile)
     failure = Failure(array=array, matrix=matrix, equation=equation, width=width, seed=seed, save_volts_profile=save_volts_profile)

@@ -45,7 +45,7 @@ class Equation:
 
     def _undo_update_matrix(self, idx_edge_island):
         array = self.array
-        idx_node1, idx_node2 = array.edges_div_cond[array.idxs_edge_to_edge_div_cond[idx_edge_island]]
+        idx_node1, idx_node2 = array.edges_div_cond[idx_edge_island]
         idx_node1_new, idx_node2_new = idx_node1 - array.length, idx_node2 - array.length_double
         div_comb = self.matrix.div_comb
         time_step = self.matrix.time_step

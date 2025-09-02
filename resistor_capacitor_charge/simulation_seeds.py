@@ -95,7 +95,7 @@ def main(length: int, width: float, seed_min: int, seed_max: int, save_volts_pro
 
     # initialization - shared across seeds
     global array_global, matrix_init_global
-    array_global = Array(length=length)
+    array_global = Array(length=length, mode_analysis=False)
     matrix_init_global = Matrix(matrix_init=None, array=array_global, val_cap=val_cap, time_step=time_step)
 
     # parallelization

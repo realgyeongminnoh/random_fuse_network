@@ -17,9 +17,8 @@ class Array:
         self.num_edge_div: int = 2 * self.num_edge
 
         self.edges: list[tuple[int, int]] = self._generate_edges()
-        self.edges_div: list[tuple[int, int]] = self._generate_edges_div()
         self.edges_div_cap, self.edges_div_cond = self._generate_edges_div_cap_cond()
-        self._generate_idxs()
+        self._generate_idxs() # REORDERS E DIV CAP AND COND TO MATCH E ORDER
 
     def _generate_edges(self):
         length = self.length
@@ -40,7 +39,8 @@ class Array:
 
         return edges
 
-    def _generate_edges_div(self):
+    def _generate_edges_div_cap_cond(self) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+        # edges_div
         edges_div = []
         idx_node = self.num_node
 
@@ -49,16 +49,15 @@ class Array:
             idx_node += 1
 
         edges_div.sort(key=lambda x: x)
-        return edges_div
-
-    def _generate_edges_div_cap_cond(self) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    
+        # edges_div_cap, edges_div_cond
         length = self.length
         length_minus_one = length - 1
         num_edge_div_minus_length = self.num_edge_div - length
         edges_div_cap, edges_div_cond = [], []
         counter = 0
 
-        for idx_edge_div, edge_div in enumerate(self.edges_div):
+        for idx_edge_div, edge_div in enumerate(edges_div):
             # edge_div_top
             if idx_edge_div < length:
                 edges_div_cap.append(edge_div)
@@ -93,30 +92,33 @@ class Array:
         self.idxs_edge_mid_node1: np.ndarray[np.int32] = edges_minus_length[self.idxs_edge_mid, 0]
         self.idxs_edge_mid_node2: np.ndarray[np.int32] = edges_minus_length[self.idxs_edge_mid, 1]
 
-        # index mapping for cond
-        # edges_div_cond[idxs[idx_edge]] <-> edges[idx_edge]
-        self.idxs_edge_to_edge_div_cond: np.ndarray[np.int32] = np.array(
-            sorted(range(self.num_edge), key=lambda idx_edge: self.edges_div_cond[idx_edge][1]), dtype=np.int32)
-        
         # index mapping for cap
         # edges_div_cap[idxs[idx_edge]] <-> edges[idx_edge]
-        self.idxs_edge_to_edge_div_cap: np.ndarray[np.int32] = np.array(
+        idxs_edge_to_edge_div_cap: np.ndarray[np.int32] = np.array(
             sorted(range(self.num_edge), key=lambda idx_edge: self.edges_div_cap[idx_edge][1]), dtype=np.int32)
 
-        # # edges[idxs[idx_edge_div_cap]] <-> edges_div_cap[idx_edge_div_cap]
-        # self.idxs_edge_div_cap_to_edge: np.ndarray[np.int32] = np.empty(self.num_edge, dtype=np.int32) 
-        # for idx1, idx2 in enumerate(self.idxs_edge_to_edge_div_cap):
-        #     self.idxs_edge_div_cap_to_edge[idx2] = idx1
+        # index mapping for cond
+        # edges_div_cond[idxs[idx_edge]] <-> edges[idx_edge]
+        idxs_edge_to_edge_div_cond: np.ndarray[np.int32] = np.array(
+            sorted(range(self.num_edge), key=lambda idx_edge: self.edges_div_cond[idx_edge][1]), dtype=np.int32)
+        
+        # REORDERED TO MATCH E ORDER
+        self.edges_div_cap[:] = [self.edges_div_cap[idx_edge_div] for idx_edge_div in idxs_edge_to_edge_div_cap]
+        self.edges_div_cond[:] = [self.edges_div_cond[idx_edge_div] for idx_edge_div in idxs_edge_to_edge_div_cond]
 
-        # horizontal and vertical edges
-        length, length_minus_one = self.length, self.length - 1
+        if self.mode_analysis:
+            self.idxs_edge_to_edge_div_cap = idxs_edge_to_edge_div_cap
+            self.idxs_edge_to_edge_div_cond = idxs_edge_to_edge_div_cond
 
-        idxs_edge_horizontal = []
-        for idx_edge in np.linspace(length, length * (2 * length_minus_one - 1), length_minus_one, dtype=np.int32).tolist():
-            idxs_edge_horizontal += [idx_edge]
-            idxs_edge_horizontal += (idx_edge + 2 * np.arange(0, length_minus_one) + 1).tolist()
+            # index lists of horizontal, vertical, pbc, horizontal except pbc edges
+            length, length_minus_one = self.length, self.length - 1
 
-        self.idxs_edge_horizontal = np.array(idxs_edge_horizontal, dtype=np.int32)
-        self.idxs_edge_vertical = np.delete(np.arange(self.num_edge, dtype=np.int32), self.idxs_edge_horizontal)
-        self.idxs_edge_pbc = (length + 1) + (2 * length) * np.arange(length - 1, dtype=np.int32)
-        self.idxs_edge_horizontal_no_pbc = self.idxs_edge_horizontal[~np.isin(self.idxs_edge_horizontal, self.idxs_edge_pbc, assume_unique=True)]
+            idxs_edge_horizontal = []
+            for idx_edge in np.linspace(length, length * (2 * length_minus_one - 1), length_minus_one, dtype=np.int32).tolist():
+                idxs_edge_horizontal += [idx_edge]
+                idxs_edge_horizontal += (idx_edge + 2 * np.arange(0, length_minus_one) + 1).tolist()
+
+            self.idxs_edge_horizontal = np.array(idxs_edge_horizontal, dtype=np.int32)
+            self.idxs_edge_vertical = np.delete(np.arange(self.num_edge, dtype=np.int32), self.idxs_edge_horizontal)
+            self.idxs_edge_pbc = (length + 1) + (2 * length) * np.arange(length - 1, dtype=np.int32)
+            self.idxs_edge_horizontal_no_pbc = self.idxs_edge_horizontal[~np.isin(self.idxs_edge_horizontal, self.idxs_edge_pbc, assume_unique=True)]

@@ -60,10 +60,10 @@ class Failure:
         self.volts_edge_profile.append(self.volts_edge_signed.copy())
 
     def _append_volts_cap_profile(self):
-        self.volts_cap_profile.append(self.volts_cap.copy()[self.array.idxs_edge_to_edge_div_cap])
+        self.volts_cap_profile.append(self.volts_cap.copy())
 
     def _append_volts_cond_profile(self):
-        self.volts_cond_profile.append(self.volts_cond.copy()[self.array.idxs_edge_to_edge_div_cond])
+        self.volts_cond_profile.append(self.volts_cond.copy())
 
     @staticmethod
     def _no_op0(): pass
@@ -87,9 +87,9 @@ class Failure:
         np.abs(volts_edge, out=volts_edge) # unsigned voltage drop
 
     def _compute_volts_edge_save(self):
-        "save signed volts_edge (signed according to E (treat it as a directed graph); pbc edges require special handling if volts_edge was to be equated to volts_cap + volts_cond)"
-        # for changing sign convention (for visualization or etc.) west -> east, north -> south
-        # self.volts_edge_signed[self.array.idxs_edge_horizontal_no_pbc] *= -1
+        "save signed volts_edge (signed according to E (treat it as a directed graph); pbc edges require special handling if volts_edge was to be equated to volts_cap + (- volts_cond))"
+        # for changing sign convention west -> east, north -> south (for visualization or etc. that do not rely on E (i -> j) order itself)
+        # np.array(failure.volts_edge_profile)[:, array.idxs_edge_horizontal_no_pbc] *= -1.0
         array = self.array
         volts_edge = self.volts_edge
 
@@ -100,7 +100,7 @@ class Failure:
         np.abs(volts_edge, out=volts_edge)
 
     def _compute_volts_cap(self):
-        "compute failure.volts_cap based on equation.volts_node_div (order is according to edges_div_cap until saving; signed west -> east, north -> south)"
+        "compute failure.volts_cap based on equation.volts_node_div (SIGNED BASED ON E DIV CAP; ORDERED BASED ON E)"
         volts_cap = self.volts_cap
         volt_ext = self.equation.volt_ext
         volts_node_div = self.equation.volts_node_div
@@ -114,7 +114,7 @@ class Failure:
                 volts_cap[idx_cap] = volts_node_div[idx_node1_new] - volts_node_div[idx_node2_new]
 
     def _compute_volts_cond(self):
-        "compute failure.volts_cond based on equation.volts_node_div (order is according to edges_div_cond until saving; signed west -> east, north -> south)"
+        "compute failure.volts_cond based on equation.volts_node_div (SIGNED BASED ON E DIV COND; ORDERED BASED ON E)"
         volts_cond = self.volts_cond
         volts_node_div = self.equation.volts_node_div
         length, length_double = self.array.length, self.array.length_double
@@ -123,9 +123,9 @@ class Failure:
         for idx_cond, (idx_node1, idx_node2) in enumerate(self.array.edges_div_cond):
             idx_node1_new, idx_node2_new = idx_node1 - length, idx_node2 - length_double
             if idx_node_bot_first_minus_one < idx_node1:
-                volts_cond[idx_cond] = volts_node_div[idx_node2_new]
+                volts_cond[idx_cond] = - volts_node_div[idx_node2_new]
             else:
-                volts_cond[idx_cond] = volts_node_div[idx_node2_new] - volts_node_div[idx_node1_new]
+                volts_cond[idx_cond] = volts_node_div[idx_node1_new] - volts_node_div[idx_node2_new]
 
     def _charge_conservation(self):
         "modify equation.volts_node_div based on failure.volts_cap computed pre-scaling; this is due to constant C and energy conservation law"
@@ -141,7 +141,7 @@ class Failure:
 
     def _update_matrix(self, idx_edge_broken):
         array = self.array
-        idx_node1, idx_node2 = array.edges_div_cond[array.idxs_edge_to_edge_div_cond[idx_edge_broken]]
+        idx_node1, idx_node2 = array.edges_div_cond[idx_edge_broken]
         idx_node1_new, idx_node2_new = idx_node1 - array.length, idx_node2 - array.length_double
         div_comb = self.matrix.div_comb
         time_step = self.matrix.time_step
