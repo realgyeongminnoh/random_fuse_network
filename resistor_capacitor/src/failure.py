@@ -1,9 +1,9 @@
 import warnings
 import numpy as np
 
-from src.array import Array
-from src.matrix import Matrix
-from src.equation import Equation
+from .array import Array
+from .matrix import Matrix
+from .equation import Equation
 
 warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero (from broken / leaf edge execlusion) ignore because inf do not cause issue for argmin
 

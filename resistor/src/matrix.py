@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse import csc_array
 
-from src.array import Array
+from .array import Array
 
 
 class Matrix:

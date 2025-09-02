@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse import csc_array
 
-from src.array import Array
+from .array import Array
 
 
 class Matrix:
@@ -12,7 +12,7 @@ class Matrix:
     def __init__(self, matrix_init: Matrix = None, array: Array = None, val_cap: float = 1.0, time_step: float = 0.01):
         if matrix_init is None:
             self.val_cap: float = float(val_cap)
-            self.time_step: float = time_step
+            self.time_step: float = float(time_step)
             self.size_cond: int = array.num_node_mid + 2
             self.size_div_comb: int = array.num_node_div_mid + 1
             self.cond: csc_array = self._initialize_cond(array)

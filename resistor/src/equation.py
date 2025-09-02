@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.sparse.linalg import spsolve
 
-from src.array import Array
-from src.matrix import Matrix
+from .array import Array
+from .matrix import Matrix
 
 
 class Equation:

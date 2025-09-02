@@ -1,9 +1,9 @@
 import warnings
 import numpy as np
 
-from src.array import Array
-from src.matrix import Matrix
-from src.equation import Equation
+from .array import Array
+from .matrix import Matrix
+from .equation import Equation
 
 warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero for finding scaling factors and some edges have 0 voltage drops # in extremely rare cases with small L those are broken
 

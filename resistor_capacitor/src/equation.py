@@ -2,10 +2,10 @@ import warnings
 import numpy as np
 from scipy.sparse.linalg import spsolve, splu
 
-from src.array import Array
-from src.matrix import Matrix
+from .array import Array
+from .matrix import Matrix
 
-warnings.filterwarnings("error") # non-dual-graph-based memory-efficient solution to a rare case of "leaf" edges being broken
+warnings.filterwarnings("error") # non-dual-graph-based memory-efficient solution for "island" issue (2> disconnected components of primal graph) but i was overly protective and its never happening after KCL equations fix
 
 
 class Equation:
