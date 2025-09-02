@@ -77,7 +77,7 @@ class Failure:
     
     def _update_matrix_cond(self, idx_edge_broken):
         idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
-        idx_node1_new, idx_node2_new = idx_node1 - self.array.length_plus_one, idx_node2 - self.array.length_plus_one
+        idx_node1_new, idx_node2_new = idx_node1 - self.array.length + 1, idx_node2 - self.array.length + 1
         cond = self.matrix.cond
 
         if idx_node2_new <= self.array.num_node_mid:

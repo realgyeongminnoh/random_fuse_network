@@ -39,7 +39,7 @@ class Array:
         self.idxs_edge_bot: np.ndarray[np.int32] = self.num_edge + np.append(np.arange((-2 * self.length + 2), 0, 2, dtype=np.int32), np.int32(-1))
         self.idxs_edge_mid: np.ndarray[np.int32] = np.delete(np.arange(self.num_edge, dtype=np.int32), np.append(self.idxs_edge_top, self.idxs_edge_bot))
         
-        # node index inside the nodal voltage vector in the matrix equation
+        # node index inside the nodal voltage vector in the matrix equation # the plus one corresponds to vtop
         edge_list_minus_length = np.array(self.edges, dtype=np.int32) - self.length
         self.idxs_edge_bot_node1: np.ndarray[np.int32] = (self.num_node_mid - self.length) + self.idxs_edge_top + 1
         self.idxs_edge_mid_node1: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 0] + 1
