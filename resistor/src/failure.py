@@ -55,31 +55,29 @@ class Failure:
     
     def _compute_volts_edge_unsave(self):
         array = self.array
-        volts_node_mod = self.equation.volts_node[1:]
         volts_edge = self.volts_edge
 
-        volts_edge[:array.length] = self.equation.volt_ext - volts_node_mod[:array.length]
-        volts_edge[array.idxs_edge_bot] = volts_node_mod[array.idxs_edge_bot_node1]
-        volts_edge[array.idxs_edge_mid] = volts_node_mod[array.idxs_edge_mid_node1] - volts_node_mod[array.idxs_edge_mid_node2]
+        volts_edge[:array.length] = self.equation.volt_ext - self.equation.volts_node[1:array.length_plus_one]
+        volts_edge[array.idxs_edge_bot] = self.equation.volts_node[array.idxs_edge_bot_node1]
+        volts_edge[array.idxs_edge_mid] = self.equation.volts_node[array.idxs_edge_mid_node1] - self.equation.volts_node[array.idxs_edge_mid_node2]
         np.abs(volts_edge, out=volts_edge)
 
     def _compute_volts_edge_save(self):
-        "save signed volts_edge (signed according to E (treat it as a directed graph); non-pbc horizontal edges require special handling if volts_edge was to be equated to volts_cap + volts_cond)"
+        "save signed volts_edge (signed according to E (treat it as a directed graph); non-pbc horizontal edges require special handling)"
         # for changing sign convention west -> east, north -> south (for visualization or etc. that do not rely on E (i -> j) order itself)
         # np.array(failure.volts_edge_profile)[:, array.idxs_edge_horizontal_no_pbc] *= -1.0
         array = self.array
-        volts_node_mod = self.equation.volts_node[1:]
         volts_edge = self.volts_edge
 
-        volts_edge[:array.length] = self.equation.volt_ext - volts_node_mod[:array.length]
-        volts_edge[array.idxs_edge_bot] = volts_node_mod[array.idxs_edge_bot_node1]
-        volts_edge[array.idxs_edge_mid] = volts_node_mod[array.idxs_edge_mid_node1] - volts_node_mod[array.idxs_edge_mid_node2]
+        volts_edge[:array.length] = self.equation.volt_ext - self.equation.volts_node[1:array.length_plus_one]
+        volts_edge[array.idxs_edge_bot] = self.equation.volts_node[array.idxs_edge_bot_node1]
+        volts_edge[array.idxs_edge_mid] = self.equation.volts_node[array.idxs_edge_mid_node1] - self.equation.volts_node[array.idxs_edge_mid_node2]
         self.volts_edge_signed[:] = volts_edge
         np.abs(volts_edge, out=volts_edge)
     
     def _update_matrix_cond(self, idx_edge_broken):
         idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
-        idx_node1_new, idx_node2_new = idx_node1 - self.array.length + 1, idx_node2 - self.array.length + 1
+        idx_node1_new, idx_node2_new = idx_node1 - self.array.length_plus_one, idx_node2 - self.array.length_plus_one
         cond = self.matrix.cond
 
         if idx_node2_new <= self.array.num_node_mid:

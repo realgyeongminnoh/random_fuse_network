@@ -6,6 +6,7 @@ class Array:
         self.mode_analysis: bool = mode_analysis
         length = int(length)
         self.length: int = length
+        self.length_plus_one: int = length + 1
         self.num_node: int = length ** 2 + length
         self.num_node_mid: int = self.num_node - 2 * length
         self.idx_node_bot_first_minus_one: int = self.num_node - self.length - 1
@@ -40,12 +41,12 @@ class Array:
         
         # node index inside the nodal voltage vector in the matrix equation
         edge_list_minus_length = np.array(self.edges, dtype=np.int32) - self.length
-        self.idxs_edge_bot_node1: np.ndarray[np.int32] = (self.num_node_mid - self.length) + self.idxs_edge_top
-        self.idxs_edge_mid_node1: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 0]
-        self.idxs_edge_mid_node2: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 1]
+        self.idxs_edge_bot_node1: np.ndarray[np.int32] = (self.num_node_mid - self.length) + self.idxs_edge_top + 1
+        self.idxs_edge_mid_node1: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 0] + 1
+        self.idxs_edge_mid_node2: np.ndarray[np.int32] = edge_list_minus_length[self.idxs_edge_mid, 1] + 1
 
-        # index lists of horizontal, vertical, pbc, horizontal except pbc edges
         if self.mode_analysis:
+            # index lists of horizontal, vertical, pbc, horizontal except pbc edges
             length, length_minus_one = self.length, self.length - 1
 
             idxs_edge_horizontal = []
