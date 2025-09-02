@@ -3,13 +3,13 @@ import numpy as np
 
 class Array:
     def __init__(self, length: int, mode_analysis: bool = False):
+        self.mode_analysis: bool = mode_analysis
         length = int(length)
         self.length: int = length
         self.num_node: int = length ** 2 + length
         self.num_node_mid: int = self.num_node - 2 * length
         self.idx_node_bot_first_minus_one: int = self.num_node - self.length - 1
         self.num_edge: int = 2 * length ** 2 - length
-        self.mode_analysis: bool = mode_analysis
 
         self.edges: list[tuple[int, int]] = self._generate_edges()
         self._generate_idxs()
