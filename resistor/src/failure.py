@@ -5,7 +5,7 @@ from .array import Array
 from .matrix import Matrix
 from .equation import Equation
 
-warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero for finding scaling factors and some edges have 0 voltage drops # in extremely rare cases with small L those are broken
+warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero for finding scaling factors and some (i.e., horizontal) edges have 0 voltage drops # also in extremely rare cases with small L those are broken
 
 
 class Failure:
