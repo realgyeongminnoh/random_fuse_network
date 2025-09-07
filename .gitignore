@@ -4,3 +4,5 @@ __pycache__/
 /analysis/
 simulation_seeds_gpu0.sh
 simulation_seeds_gpu5.sh
+/resistor_capacitor/data/0.01_0.01/
+/resistor_capacitor/data/0.0001_0.01/
