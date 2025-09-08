@@ -144,8 +144,8 @@ class Equation:
 
     def solve_r_amd(self) -> bool:
         try:
-            self.vec_rhs[-1] = 1.0
-            return np.abs(spsolve(self.matrix_ch.cond, self.vec_rhs, permc_spec="COLAMD")[-1]) > self._curr_fpe_proof # 1e-5
+            self.vec_rhs[-1] = self.volt_ext
+            return np.abs(spsolve(self.matrix_ch.cond, self.vec_rhs, permc_spec="COLAMD")[-1]) > 1e-5 # self._curr_fpe_proof # 1e-5
         except:
             idx_edge_island = self.failure.idxs_edge_broken.pop()
             self.failure.idxs_edge_island.append(idx_edge_island)
