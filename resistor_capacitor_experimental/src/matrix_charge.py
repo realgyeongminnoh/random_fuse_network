@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from scipy.sparse import csc_array
+from scipy.sparse import csc_array, bmat
 
 from .array import Array
 
@@ -15,17 +15,22 @@ class Matrix:
             self.time_step: float = float(time_step)
             self.size_cond: int = array.num_node_mid + 2
             self.size_div_comb: int = array.num_node_div_mid + 1
+            self.size_div_block: int = self.size_div_comb + array.num_edge
             self.cond: csc_array = self._initialize_cond(array)
             self.div_cap: csc_array = self._initialize_div_cap(array)
-            self.div_comb: csc_array = self._initialize_div_comb(array)
+            self.div_comb: csc_array = None
+            self.div_block: csc_array = None
+            self._initialize_rest(array)
         else:
             self.val_cap: float = matrix_init.val_cap
             self.time_step: float = matrix_init.time_step
             self.size_cond: int = matrix_init.size_cond
             self.size_div_comb: int = matrix_init.size_div_comb
+            self.size_div_block: int = matrix_init.size_div_block
             self.cond: csc_array = matrix_init.cond.copy()
             self.div_cap: csc_array = matrix_init.div_cap.copy()
             self.div_comb: csc_array = matrix_init.div_comb.copy()
+            self.div_block: csc_array = matrix_init.div_block.copy()
 
     def _initialize_cond(self, array: Array):
         length_minus_one = array.length - 1
@@ -72,11 +77,28 @@ class Matrix:
         row, col, data = np.array(row, dtype=np.int32), np.array(col, dtype=np.int32), np.array(data, dtype=np.float64)
         return csc_array((data, (row, col)), shape=(self.size_div_comb, self.size_div_comb))
 
-    def _initialize_div_comb(self, array: Array):
+    def _initialize_rest(self, array: Array):
         length, length_double = array.length, array.length_double
         idx_node_bot_first_minus_one = array.idx_node_bot_first_minus_one
         num_node_div_mid = array.num_node_div_mid
-        row, col, data = [], [], []
+        row, col, data = [], [], [] # div_cap_inc
+
+        for idx_cap, (idx_node1, idx_node2) in enumerate(array.edges_div_cap):
+            idx_node1_new, idx_node2_new = idx_node1 - array.length, idx_node2 - length_double
+            
+            if idx_node1 < length: # corresponds to vtop
+                row.append(idx_cap)
+                col.append(idx_node2_new)
+                data.append(-1)
+            else:
+                row.extend((idx_cap, idx_cap))
+                col.extend((idx_node1_new, idx_node2_new))
+                data.extend((1, -1))
+
+        row, col, data = np.array(row, dtype=np.int32), np.array(col, dtype=np.int32), np.array(data, dtype=np.float64)
+        div_cap_inc = csc_array((data, (row, col)), shape=(array.num_edge, self.size_div_comb)) # div_cap_inc
+
+        row, col, data = [], [], [] # div_cond, div_comb
 
         row.append(num_node_div_mid)
         col.append(num_node_div_mid)
@@ -94,4 +116,9 @@ class Matrix:
 
         row, col, data = np.array(row, dtype=np.int32), np.array(col, dtype=np.int32), np.array(data, dtype=np.float64)
         div_cond = csc_array((data, (row, col)), shape=(self.size_div_comb, self.size_div_comb))
-        return self.div_cap + self.time_step * div_cond # C + Δt * G = div_comb(ined)
+        self.div_comb = self.div_cap + self.time_step * div_cond # C + Δt * G = div_comb(ined)
+
+        self.div_block = bmat( # matrix used to solve for init cond with nonzero cap volt in the charging model
+            [[div_cond, div_cap_inc.T], [div_cap_inc, csc_array((array.num_edge, array.num_edge))]],
+            format="csc",
+        )

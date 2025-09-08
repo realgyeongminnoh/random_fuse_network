@@ -10,9 +10,9 @@ warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero for 
 
 class Failure:
     def __init__(self, array: Array, matrix: Matrix, equation: Equation, width: float, seed: int, save_volts_profile: bool = False):
-        self.array = array
-        self.matrix = matrix
-        self.equation = equation
+        self.array: Array = array
+        self.matrix: Matrix = matrix
+        self.equation: Equation = equation
         self.equation._lazy_init_failure(self)
         self.width = float(width)
         self.seed = int(seed)
