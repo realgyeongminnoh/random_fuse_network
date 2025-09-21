@@ -59,12 +59,12 @@ class Equation:
         for idx_node1, idx_node2 in self.array.edges_div_cap[length:]:
             volts_node_div[idx_node2 - length_double] = volts_node_div[idx_node1 - length]
 
-    def solve_init_ch(self) -> None: # for nonzero volts_cap mid simulation (discharge -> charge), also works for zero volts_cap ...
+    def solve_init_ch(self) -> None: # NOT TIME ADVANCE # for nonzero volts_cap mid simulation (discharge -> charge), also works for zero volts_cap ...
         self.vec_rhs_div[self.matrix_ch.size_div_comb:] = self.failure.volts_cap
         self.vec_rhs_div[self.matrix_ch.size_div_comb:self.matrix_ch.size_div_comb + self.array.length] -= self.volt_ext
         self.volts_node_div[:] = spsolve(self.matrix_ch.div_block, self.vec_rhs_div, permc_spec="MMD_ATA")[:self.matrix_ch.size_div_comb]
 
-    def solve_init_dch(self) -> None: # for nonzero volts_cap mid simulation (charge -> discharge) 
+    def solve_init_dch(self) -> None: # NOT TIME ADVANCE # for nonzero volts_cap mid simulation (charge -> discharge) 
         self.vec_rhs_div[self.matrix_dch.size_div_comb:] = self.failure.volts_cap
         self.volts_node_div[:] = spsolve(self.matrix_dch.div_block, self.vec_rhs_div, permc_spec="MMD_ATA")[:self.matrix_dch.size_div_comb]
         self.failure._last_time_step_broken = True
@@ -144,8 +144,8 @@ class Equation:
 
     def solve_r_amd(self) -> bool:
         try:
-            self.vec_rhs[-1] = self.volt_ext
-            return np.abs(spsolve(self.matrix_ch.cond, self.vec_rhs, permc_spec="COLAMD")[-1]) > 1e-5 # self._curr_fpe_proof # 1e-5
+            self.vec_rhs[-1] = 1.0
+            return np.abs(spsolve(self.matrix_ch.cond, self.vec_rhs, permc_spec="COLAMD")[-1]) > self._curr_fpe_proof # 1e-5
         except:
             idx_edge_island = self.failure.idxs_edge_broken.pop()
             self.failure.idxs_edge_island.append(idx_edge_island)
@@ -166,9 +166,7 @@ class Equation:
             self._pop_volts_cap_profile_dynamic()
             self._pop_volts_cond_profile_dynamic()
 
-            if self.failure._last_time_step_break_edge_type == 0:
-                self.failure.break_edge_init_ch()
-            elif self.failure._last_time_step_break_edge_type == 1:
+            if self.failure._last_time_step_break_edge_type:
                 self.failure.break_edge_ch()
             else:
                 self.failure.break_edge_dch()

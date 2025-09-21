@@ -1,12 +1,24 @@
-import warnings
-from scipy.sparse.linalg import MatrixRankWarning
+#!/usr/bin/env python3
+"""
+RC charge↔discharge ensemble runner (experimental variant).
 
-# rc_cycle_ensemble.py
+- Minimal I/O:
+  * For each width: saves `num_cycle.npy` (int32, shape=(seeds,)) in the width folder.
+  * For each seed: saves `volts_ext.npy` (float64) in width/SEED/.
+- Default output root: data/
+- Parallelization: per-width, seeds distributed to up to --cpus workers.
+"""
+import sys
 import argparse
-import numpy as np
 from pathlib import Path
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+import numpy as np
+
+# Allow "src" imports when running from repo root
+THIS_DIR = Path(__file__).resolve().parent
+SRC_DIR = THIS_DIR / "src"
+sys.path.insert(0, str(SRC_DIR))
 
 from src.array import Array
 from src.matrix_charge import Matrix as Matrix_charge
@@ -14,183 +26,137 @@ from src.matrix_discharge import Matrix as Matrix_discharge
 from src.equation import Equation
 from src.failure import Failure
 
-# -------------------- helpers --------------------
-def validate_args(args: argparse.Namespace) -> None:
-    if not (args.length >= 3): raise ValueError("length >= 3")
-    if not (0 <= args.cond_ext): raise ValueError("cond_ext >= 0")
-    if not (args.time_step > 0): raise ValueError("time_step > 0")
-    if not (args.cpu >= 1): raise ValueError("cpu >= 1")
 
-def get_output_dir(base: Path, val_cap: float, time_step: float,
-                   length: int, width: float, seed: int) -> Path:
-    out = base / f"{val_cap}_{time_step}" / str(length) / str(width) / str(seed)
-    out.mkdir(parents=True, exist_ok=True)
-    return out
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="RFN RC charge↔discharge ensemble (experimental)")
+    ap.add_argument("--length", type=int, required=True, help="L (>=3)")
+    ap.add_argument("--val-cap", type=float, required=True, help="capacitance value")
+    ap.add_argument("--time-step", type=float, required=True, help="time step")
+    ap.add_argument("--cond-ext", type=float, required=True, help="external conductance for discharge")
+    ap.add_argument("--widths", type=float, nargs="+", required=True, help="list of width values")
+    ap.add_argument("--seeds", type=int, required=True, help="number of seeds (0..seeds-1)")
+    ap.add_argument("--cpus", type=int, default=1, help="max workers")
+    ap.add_argument("--out", type=str, default="data", help="output root directory (default: data)")
+    # profiles are heavy; keep them off by default
+    ap.add_argument("--save-volts-profile", action="store_true", help="save heavy voltage profiles (off by default)")
+    return ap.parse_args()
 
-def count_broken_by_cycle(failure: Failure, duration_charge: int, duration_discharge: int):
-    t = np.asarray(failure.idxs_time_edge_broken, dtype=np.int64)
-    if t.size == 0:
-        return 0, 0
-    period = duration_charge + duration_discharge
-    r = t % period
-    is_ch = r < duration_charge
-    return int(is_ch.sum()), int((~is_ch).sum())
 
-def run_charge_cycle_first(equation: Equation, failure: Failure, duration_cycle: int, solve_r) -> bool:
-    solve = equation.solve_true_init_ch
-    break_edge = failure.break_edge_init_ch
-    solve(); break_edge()
-    solve = equation.solve_ch
-    break_edge = failure.break_edge_ch
-    for _ in range(duration_cycle - 1):
-        if not solve_r(): return False
-        solve(); break_edge()
-    return True
-
-def run_charge_cycle_from_dch(equation: Equation, failure: Failure, duration_cycle: int, solve_r) -> bool:
-    if not solve_r():                            # ← guard before init
-        return False
-    solve = equation.solve_init_ch
-    break_edge = failure.break_edge_ch
-    solve(); break_edge()                        # t=0 after D→C (caps nonzero)
-
-    solve = equation.solve_ch
-    break_edge = failure.break_edge_ch
-    for _ in range(duration_cycle - 1):
-        if not solve_r(): return False
-        solve(); break_edge()
-    return True
-
-def run_discharge_cycle(equation: Equation, failure: Failure, duration_cycle: int, solve_r) -> bool:
-    if not solve_r():                            # ← guard before init
-        return False
-    solve = equation.solve_init_dch
-    break_edge = failure.break_edge_dch
-    solve(); break_edge()                        # t=0 for C→D
-
-    solve = equation.solve_dch
-    break_edge = failure.break_edge_dch
-    for _ in range(duration_cycle - 1):
-        if not solve_r(): return False
-        solve(); break_edge()
-    return True
-
-# -------------------- globals filled in main() and used by workers --------------------
-array_global = None
-matrix_init_ch_global = None
-matrix_init_dch_global = None
-duration_charge_global = None
-duration_discharge_global = None
-val_cap_global = None
-time_step_global = None
-cond_ext_global = None
-save_volts_profile_global = None
-output_base_global = None
-
-SEED_STRIDE = 1_000_000
-MAX_ATTEMPTS = 25  # bump if you want
-
-def run_one_attempt(width: float, seed: int):
-    # build per-attempt objects using shared array/matrices
-    matrix_ch = Matrix_charge(matrix_init=matrix_init_ch_global, array=None)
-    matrix_dch = Matrix_discharge(matrix_init=matrix_init_dch_global, array=None)
-    equation = Equation(array=array_global, matrix_ch=matrix_ch, matrix_dch=matrix_dch)
-    failure = Failure(array=array_global, matrix_ch=matrix_ch, matrix_dch=matrix_dch,
-                      equation=equation, width=float(width), seed=int(seed),
-                      save_volts_profile=save_volts_profile_global)
+def simulate_one(seed: int, length: int, width: float, val_cap: float, time_step: float,
+                 cond_ext: float, save_volts_profile: bool, out_width: Path) -> int:
+    """
+    Run one seed and save only volts_ext (per seed). Return num_cycles.
+    """
+    # --- setup ---
+    array = Array(length=length, mode_analysis=False)
+    matrix_ch = Matrix_charge(matrix_init=None, array=array, val_cap=val_cap, time_step=time_step)
+    matrix_dch = Matrix_discharge(matrix_init=None, array=array, cond_ext=cond_ext, val_cap=val_cap, time_step=time_step)
+    equation = Equation(array=array, matrix_ch=matrix_ch, matrix_dch=matrix_dch, save_volts_profile=save_volts_profile)
+    failure = Failure(array=array, matrix_ch=matrix_ch, matrix_dch=matrix_dch, equation=equation,
+                      width=width, seed=seed, save_volts_profile=save_volts_profile)
 
     solve_r = equation.solve_r_amd
 
-    if run_charge_cycle_first(equation, failure, duration_charge_global, solve_r):
-        while run_discharge_cycle(equation, failure, duration_discharge_global, solve_r) and \
-              run_charge_cycle_from_dch(equation, failure, duration_charge_global, solve_r):
-            pass
+    # --- cycle runners ---
+    def run_charge_cycle_first(duration_cycle: int) -> bool:
+        solve = equation.solve_true_init_ch
+        break_edge = failure.break_edge_init_ch
+        solve(); break_edge()  # t=0
 
-    num_broken_total = int(len(failure.idxs_edge_broken))
-    num_ch, num_dch = count_broken_by_cycle(failure, duration_charge_global, duration_discharge_global)
-    cycles_endured = int(failure.counter_time_step // (duration_charge_global + duration_discharge_global))
-    volts_ext = np.asarray(failure.volts_ext, dtype=np.float64)
+        solve = equation.solve_ch
+        break_edge = failure.break_edge_ch
+        for _ in range(duration_cycle - 1):
+            if not solve_r():
+                return False
+            solve(); break_edge()
+        return True
 
-    return {
-        "width": float(width),
-        "seed": int(seed),  # actual seed used in this successful attempt
-        "volts_ext": volts_ext,
-        "num_broken_total": num_broken_total,
-        "num_broken_charge": num_ch,
-        "num_broken_discharge": num_dch,
-        "cycles_endured": cycles_endured,
-    }
+    def run_charge_cycle_from_dch(duration_cycle: int) -> bool:
+        if not solve_r(): return False
 
-def run_one_with_retry(width: float, base_seed: int):
-    # promote singular KKT to exception so we can retry
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", MatrixRankWarning)
-        attempt = 0
-        while attempt < MAX_ATTEMPTS:
-            seed = int(base_seed + attempt * SEED_STRIDE)
-            try:
-                rec = run_one_attempt(width, seed)
-                # save under the actual seed used
-                outdir = get_output_dir(output_base_global, val_cap_global, time_step_global,
-                                        array_global.length, width, seed)
-                np.savez_compressed(outdir / "summary.npz", **rec)
-                return
-            except MatrixRankWarning:
-                attempt += 1
-                continue
-        # if we get here, we failed too many times — skip this task silently
-        return
+        solve = equation.solve_init_ch
+        break_edge = failure.break_edge_ch
+        solve(); break_edge()  # t=0 after D→C
 
-def parallel_job(task):
-    width, base_seed = task
-    run_one_with_retry(width, base_seed)
+        solve = equation.solve_ch
+        break_edge = failure.break_edge_ch
+        for _ in range(duration_cycle - 1):
+            if not solve_r():
+                return False
+            solve(); break_edge()
+        return True
 
-# -------------------- main --------------------
-def main():
-    parser = argparse.ArgumentParser(description="RC cycle ensemble (shared Array & init matrices)")
-    parser.add_argument("--length", type=int, default=30)
-    parser.add_argument("--val_cap", type=float, default=0.01)
-    parser.add_argument("--time_step", type=float, default=0.01)
-    parser.add_argument("--cond_ext", type=float, default=100.0)
-    parser.add_argument("--widths", type=float, nargs="+", default=[0.5, 1.0, 1.5, 2.0])
-    parser.add_argument("--seeds", type=int, default=100)
-    parser.add_argument("--cpu", type=int, default=15)
-    parser.add_argument("--save_volts_profile", action="store_true")
-    parser.add_argument("--output_base", type=Path, default=Path(__file__).resolve().parent / "data_rc_cycle")
-    args = parser.parse_args()
+    def run_discharge_cycle(duration_cycle: int) -> bool:
+        if not solve_r(): return False
 
-    validate_args(args)
+        solve = equation.solve_init_dch
+        break_edge = failure.break_edge_dch
+        solve(); break_edge()  # t=0 for C→D
 
-    if mp.get_start_method() != "fork":
-        raise EnvironmentError("linux/fork start method recommended for zero-copy sharing")
+        solve = equation.solve_dch
+        break_edge = failure.break_edge_dch
+        for _ in range(duration_cycle - 1):
+            if not solve_r():
+                return False
+            solve(); break_edge()
+        return True
 
-    # shared across workers (copy-on-write via fork)
-    global array_global, matrix_init_ch_global, matrix_init_dch_global
-    global duration_charge_global, duration_discharge_global
-    global val_cap_global, time_step_global, cond_ext_global, save_volts_profile_global, output_base_global
+    duration_charge = array.length // 2
+    duration_discharge = array.length // 2
 
-    array_global = Array(length=args.length, mode_analysis=False)
-    matrix_init_ch_global  = Matrix_charge(matrix_init=None, array=array_global,
-                                           val_cap=args.val_cap, time_step=args.time_step)
-    matrix_init_dch_global = Matrix_discharge(matrix_init=None, array=array_global,
-                                              cond_ext=args.cond_ext, val_cap=args.val_cap, time_step=args.time_step)
+    ok = run_charge_cycle_first(duration_charge)
+    num_cycles = 0
+    while ok:
+        ok = run_discharge_cycle(duration_discharge) and run_charge_cycle_from_dch(duration_charge)
+        num_cycles += 1
 
-    duration_charge_global    = args.length // 2
-    duration_discharge_global = args.length // 2
-    val_cap_global = args.val_cap
-    time_step_global = args.time_step
-    cond_ext_global = args.cond_ext
-    save_volts_profile_global = args.save_volts_profile
-    output_base_global = args.output_base
-    output_base_global.mkdir(parents=True, exist_ok=True)
+    # --- save per-seed volts_ext ---
+    seed_dir = out_width / f"{seed}"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    np.save(seed_dir / "volts_ext.npy", np.asarray(failure.volts_ext, dtype=np.float64))
 
-    # task list: 4 widths × N seeds
-    tasks = [(w, s) for w in args.widths for s in range(args.seeds)]
+    return int(num_cycles)
 
-    max_workers = min(args.cpu, len(tasks))
+
+def run_width(width: float, args: argparse.Namespace) -> None:
+    # width directory: out_root/{valcap}_{tstep}/{length}/{width}/
+    out_root = Path(args.out)
+    cap_time_dir = out_root / f"{float(args.val_cap)}_{float(args.time_step)}"
+    out_width = cap_time_dir / f"{float(width):.2f}"
+    out_width.mkdir(parents=True, exist_ok=True)
+
+    n = int(args.seeds)
+    num_cycles = np.zeros(n, dtype=np.int32)
+
+    max_workers = min(args.cpus, n) if args.cpus > 0 else 1
     with ProcessPoolExecutor(max_workers=max_workers) as ex:
-        for _ in ex.map(parallel_job, tasks):
-            pass
+        futures = {
+            ex.submit(
+                simulate_one,
+                seed, args.length, width,
+                args.val_cap, args.time_step, args.cond_ext,
+                bool(args.save_volts_profile), out_width
+            ): seed for seed in range(n)
+        }
+        for fut in as_completed(futures):
+            s = futures[fut]
+            try:
+                num_cycles[s] = fut.result()
+            except Exception as e:
+                # If a seed fails, reflect it with -1
+                num_cycles[s] = -1
+
+    # Save aggregated num_cycle per width
+    np.save(out_width / "num_cycle.npy", num_cycles)
+
+
+def main():
+    args = parse_args()
+
+    # loop widths sequentially; seeds run in parallel
+    for w in args.widths:
+        run_width(float(w), args)
+
 
 if __name__ == "__main__":
     main()

@@ -12,7 +12,7 @@ warnings.simplefilter("ignore", category=RuntimeWarning) # division by zero (fro
 class Failure:
     def __init__(
         self, array: Array, matrix_ch: Matrix_charge, matrix_dch: Matrix_discharge, equation: Equation,
-        width: float, seed: int, save_volts_profile: bool = False
+        width: float, seed: int, save_volts_profile: bool = False, _test1: bool = True, _test2: bool = True,
     ):
         self.array: Array = array
         self.matrix_ch: Matrix_charge = matrix_ch
@@ -34,8 +34,8 @@ class Failure:
         self.counter_time_step: int = 0
         self.idxs_time_edge_broken: list[int] = []
         self._last_time_step_broken: bool = True
-        self._last_time_step_break_edge_type: int = 0
-
+        self._last_time_step_break_edge_type: bool = True # True: charge, False: discharge
+        self._test1, self._test2 = _test1, _test2 #################################################
         if save_volts_profile:
             self.volts_edge_profile: list[np.ndarray[np.float64]] = []
             self.volts_edge_signed: np.ndarray[np.float64] = np.empty(self.array.num_edge, dtype=np.float64)
@@ -309,7 +309,7 @@ class Failure:
             return self._find_edge_broken_leaf_proof(quantities)
         return idx_edge_broken
 
-    def break_edge_init_ch(self) -> None:
+    def break_edge_true_init_ch(self) -> None:
         self._compute_volts_edge_ch()
         stresses_edge_neg = self.breaking_strengths - self.volts_edge
         stresses_edge_neg[self.idxs_edge_broken] = np.inf
@@ -336,7 +336,6 @@ class Failure:
         self._append_volts_cond_profile_dynamic()
         self.volts_ext.append(float(self.equation.volt_ext))
 
-        self._last_time_step_break_edge_type = 0
         self.counter_time_step += 1
 
     def break_edge_ch(self) -> None:
@@ -355,6 +354,7 @@ class Failure:
 
             self.equation.volts_node_div_prev = None
             self._append_volts_edge_profile_dynamic()
+            self._compute_volts_cap_ch() # must compute (not dynamic)
 
         else:
             idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
@@ -368,26 +368,50 @@ class Failure:
             idx_edge_broken = self._find_edge_broken_leaf_proof(factors_scaling)
             factor_scaling = factors_scaling[idx_edge_broken]
 
-            self._update_matrix_ch(idx_edge_broken)
-            self._update_matrix_dch(idx_edge_broken)
-            self.idxs_edge_broken.append(idx_edge_broken)
-            self.idxs_time_edge_broken.append(self.counter_time_step)
 
-            self._compute_volts_cap_ch()
-            self.equation.volt_ext *= factor_scaling
-            self.equation.volts_node_div_prev = self.equation.volts_node_div.copy()
-            self.equation.volts_node_div *= factor_scaling
-            self._charge_conservation_ch()
+            if self._test1: # new correct bookkeeeping
+                self.idxs_edge_broken.append(idx_edge_broken)
+                self.idxs_time_edge_broken.append(self.counter_time_step)
 
-            self._append_volts_edge_profile_scale_dynamic(factor_scaling)
+                self._compute_volts_cap_ch() # update volts_cap based on volts_node_div
+                self.volts_cap_prev = self.volts_cap.copy() ##############################
+                self.equation.volt_ext *= factor_scaling # update volts_ext
+                self.equation.volts_node_div_prev = self.equation.volts_node_div.copy() # save pre-scaling volts_node_div incase of fall back from attempted breaking of idx_edge_island next time step
+            
+                self.equation.solve_init_ch() # compute post-scaling volts_node_div based on volts_cap and post-scaling volt_ext
+                if self._test2: 
+                    self._charge_conservation_ch() ######################################
+                self._compute_volts_cap_ch() ##################################
+                if np.max(np.abs(self.volts_cap - self.volts_cap_prev)) > 1e-14: print(np.max(self.volts_cap - self.volts_cap_prev)) ###########
 
-        self._compute_volts_cap_dynamic_ch()
+
+                self._update_matrix_ch(idx_edge_broken)
+                self._update_matrix_dch(idx_edge_broken)
+
+                self._compute_volts_edge_ch()
+                self._append_volts_edge_profile_dynamic()
+            else:  # old , still correct (just saved profile is "incorrect", but actual simulation data are all correct because this only cause bookkeeping issue, no effects on the breakdown dynamics logic)
+                self._update_matrix_ch(idx_edge_broken)
+                self._update_matrix_dch(idx_edge_broken)
+                self.idxs_edge_broken.append(idx_edge_broken)
+                self.idxs_time_edge_broken.append(self.counter_time_step)
+
+                self._compute_volts_cap_ch()
+                self.equation.volt_ext *= factor_scaling
+                self.equation.volts_node_div_prev = self.equation.volts_node_div.copy()
+                self.equation.volts_node_div *= factor_scaling
+                self._charge_conservation_ch()
+
+                self._append_volts_edge_profile_scale_dynamic(factor_scaling)
+                self._compute_volts_cap_ch() # must compute (not dynamic)
+
         self._append_volts_cap_profile_dynamic()
         self._compute_volts_cond_dynamic_ch()
         self._append_volts_cond_profile_dynamic()
         self.volts_ext.append(float(self.equation.volt_ext))
 
-        self._last_time_step_break_edge_type = 1
+        self._last_time_step_broken = True
+        self._last_time_step_break_edge_type = True
         self.counter_time_step += 1
 
     def break_edge_dch(self) -> None:
@@ -416,11 +440,11 @@ class Failure:
             self._last_time_step_broken = False
 
         self._append_volts_edge_profile_dynamic()
-        self._compute_volts_cap_dynamic_dch()
+        self._compute_volts_cap_dch() # must compute (not dynamic)
         self._append_volts_cap_profile_dynamic()
         self._compute_volts_cond_dynamic_dch()
         self._append_volts_cond_profile_dynamic()
-        self.volts_ext.append(np.nan)
+        self.volts_ext.append(float(self.equation.volts_node_div[0]))
 
-        self._last_time_step_break_edge_type = 2
+        self._last_time_step_break_edge_type = False
         self.counter_time_step += 1
