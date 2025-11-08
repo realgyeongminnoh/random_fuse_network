@@ -1,0 +1,5 @@
+__pycache__/
+data/
+/archive/
+simulation_seeds_*.sh
+/resistor_capacitor_experimental/
