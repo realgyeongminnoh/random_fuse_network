@@ -14,7 +14,7 @@ def breakdown(
     # initialization
     array = Array(length=length, mode_analysis=True)
     matrix = Matrix(matrix_init=None, array=array)
-    equation = Equation(array=array, matrix=matrix, save_volts_profile=True)
+    equation = Equation(array=array, matrix=matrix)
     failure = Failure(array=array, matrix=matrix, equation=equation, width=width, seed=seed, save_volts_profile=True)
 
     # breakdown simulation

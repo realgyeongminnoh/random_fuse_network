@@ -30,7 +30,7 @@ def get_output_dir(args: argparse.Namespace) -> Path | None:
     output_dir = Path(__file__).resolve().parent / "data" / str(args.length) / str(args.width) / str(args.seed)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "volts_ext.npy").exists():
+    if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "idxs_edge_unalive").exists() and (output_dir / "volts_ext.npy").exists():
         if args.save:
             if (output_dir / "volts_edge_profile.npy").exists():
                 return None
@@ -42,6 +42,7 @@ def get_output_dir(args: argparse.Namespace) -> Path | None:
 
 def save_result(output_dir: Path, failure: Failure) -> None:
     np.save(output_dir / "idxs_edge_broken.npy", np.array(failure.idxs_edge_broken, dtype=np.int32))
+    np.save(output_dir / "idxs_edge_unalive.npy", np.array(failure.idxs_edge_unalive, dtype=np.int32))
     np.save(output_dir / "volts_ext.npy", np.array(failure.volts_ext, dtype=np.float64))
     if hasattr(failure, "volts_edge_profile"):
         np.save(output_dir / "volts_edge_profile.npy", np.array(failure.volts_edge_profile, dtype=np.float64))
@@ -51,7 +52,7 @@ def main(length: int, width: float, seed: int, save_volts_profile: bool) -> None
     # initialization
     array = Array(length=length, mode_analysis=False)
     matrix = Matrix(matrix_init=None, array=array)
-    equation = Equation(array=array, matrix=matrix, save_volts_profile=save_volts_profile)
+    equation = Equation(array=array, matrix=matrix)
     failure = Failure(array=array, matrix=matrix, equation=equation, width=width, seed=seed, save_volts_profile=save_volts_profile)
 
     # breakdown simulation

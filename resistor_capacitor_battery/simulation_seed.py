@@ -33,7 +33,7 @@ def get_output_dir(args: argparse.Namespace) -> Path | None:
     output_dir = Path(__file__).resolve().parent / "data" / str(args.cap) / str(args.length) / str(args.width) / str(args.seed)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "volts_ext.npy").exists():
+    if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "volts_ext.npy").exists() and (output_dir / "volts_cap_last.npy").exists():
         if args.save:
             if (output_dir / "volts_edge_profile.npy").exists() and (output_dir / "volts_cap_profile.npy") and (output_dir / "volts_cond_profile.npy"):
                 return None
@@ -46,6 +46,7 @@ def get_output_dir(args: argparse.Namespace) -> Path | None:
 def save_result(output_dir: Path, failure: Failure) -> None:
     np.save(output_dir / "idxs_edge_broken.npy", np.array(failure.idxs_edge_broken, dtype=np.int32))
     np.save(output_dir / "volts_ext.npy", np.array(failure.volts_ext, dtype=np.float64))
+    np.save(output_dir / "volts_cap_last.npy", np.abs(np.array(failure.volts_cap, dtype=np.float64)))
     if hasattr(failure, "volts_edge_profile"):
         np.save(output_dir / "volts_edge_profile.npy", np.array(failure.volts_edge_profile, dtype=np.float64))
         np.save(output_dir / "volts_cap_profile.npy", np.array(failure.volts_cap_profile, dtype=np.float64))

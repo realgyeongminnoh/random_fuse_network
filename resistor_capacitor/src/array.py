@@ -19,7 +19,7 @@ class Array:
         self.edges: list[tuple[int, int]] = self._generate_edges()
         self.edges_div_cap, self.edges_div_cond = self._generate_edges_div_cap_cond()
         self._generate_idxs() # REORDERS E DIV CAP AND COND TO MATCH E ORDER
-        self._generate_dual()
+        self._initialize_check_graph()
         
     def _generate_edges(self):
         length = self.length
@@ -122,41 +122,56 @@ class Array:
             self.idxs_edge_to_edge_div_cap = idxs_edge_to_edge_div_cap
             self.idxs_edge_to_edge_div_cond = idxs_edge_to_edge_div_cond
 
-    def _generate_dual(self):
-        length, length_minus_one = self.length, self.length - 1
-        self.num_face: int = length ** 2
+            # mapping idx_edge to edge_dual ( (face1, face2) )
+            self.idxs_edge_to_edges_dual: list[tuple[int, int]] = [None] * self.num_edge
+            for idx_edge, edge in enumerate(self.edges):
+                idx_node1, idx_node2 = edge # idx_node1 < idx_node2
 
-        # DSU
-        self.parents: np.ndarray = np.arange(self.num_face, dtype=np.int32)
-        self.sizes: np.ndarray = np.ones(self.num_face, dtype=np.int32)
-        self.parities: np.ndarray = np.zeros(self.num_face, dtype=np.uint8)
-        self.parities_edge_broken = np.fromiter((
-            (idx_node2 == idx_node1 + length) and (idx_node1 % length == 0)
-            for (idx_node1, idx_node2) in self.edges
-            ), dtype=np.uint8, count=len(self.edges)
-        )
-
-        # mapping idx_edge to edge_dual ( (face1, face2) )
-        self.idxs_edge_to_edges_dual: list[tuple[int, int]] = [None] * self.num_edge
-        for idx_edge, edge in enumerate(self.edges):
-            idx_node1, idx_node2 = edge # idx_node1 < idx_node2
-
-            # vertical
-            if idx_node2 == idx_node1 + length:
-                if idx_node1 % length == 0: # EDGE_DUAL AFFECTED BY PBC PERIODICITY
-                    idx_face1 = idx_node1
-                    idx_face2 = idx_node2 - 1
+                # vertical
+                if idx_node2 == idx_node1 + length:
+                    if idx_node1 % length == 0: # EDGE_DUAL AFFECTED BY PBC PERIODICITY
+                        idx_face1 = idx_node1
+                        idx_face2 = idx_node2 - 1
+                    else:
+                        idx_face1 = idx_node1 - 1
+                        idx_face2 = idx_node1
+                    
+                # horizontal
                 else:
-                    idx_face1 = idx_node1 - 1
-                    idx_face2 = idx_node1
-                
-            # horizontal
-            else:
-                if idx_node1 % length == 0 and idx_node2 % length == length_minus_one: # EDGE_DUAL AFFECTED BY PBC PERIODICITY
-                    idx_face1 = idx_node1 - 1
-                    idx_face2 = idx_node2
-                else:
-                    idx_face1 = idx_node1 - length
-                    idx_face2 = idx_node1
+                    if idx_node1 % length == 0 and idx_node2 % length == length_minus_one: # EDGE_DUAL AFFECTED BY PBC PERIODICITY
+                        idx_face1 = idx_node1 - 1
+                        idx_face2 = idx_node2
+                    else:
+                        idx_face1 = idx_node1 - length
+                        idx_face2 = idx_node1
 
-            self.idxs_edge_to_edges_dual[idx_edge] = (idx_face1, idx_face2)
+                self.idxs_edge_to_edges_dual[idx_edge] = (idx_face1, idx_face2)
+
+    def _initialize_check_graph(self):
+        # 1) endpoints as int32 (edges stored i<j already)
+        self.u, self.v = np.array(self.edges, dtype=np.int32).T
+
+        # 2) terminals (shared, never mutate)
+        self.is_top_node = np.zeros(self.num_node, dtype=bool);  self.is_top_node[:self.length] = True
+        self.is_bot_node = np.zeros(self.num_node, dtype=bool);  self.is_bot_node[self.num_node - self.length:] = True
+        self.idxs_node_top = np.arange(self.length, dtype=np.int32)
+        self.idxs_node_bot = np.arange(self.num_node - self.length, self.num_node, dtype=np.int32)
+
+        # 3) CSR adjacency for the UNDIRECTED graph (half-edges) + edge index per half-edge
+        deg = np.zeros(self.num_node, dtype=np.int32)
+        for (a, b) in zip(self.u, self.v):
+            deg[a] += 1; deg[b] += 1
+        indptr = np.empty(self.num_node + 1, dtype=np.int32)
+        indptr[0] = 0; np.cumsum(deg, out=indptr[1:])
+
+        indices = np.empty(indptr[-1], dtype=np.int32)
+        half_edge_idx = np.empty(indptr[-1], dtype=np.int32)  # edge id per half-edge
+        # fill
+        cur = indptr.copy()
+        for e, (a, b) in enumerate(zip(self.u, self.v)):
+            ia = cur[a]; indices[ia] = b; half_edge_idx[ia] = e; cur[a] += 1
+            ib = cur[b]; indices[ib] = a; half_edge_idx[ib] = e; cur[b] += 1
+
+        self.indptr = indptr
+        self.indices = indices
+        self.half_edge_idx = half_edge_idx

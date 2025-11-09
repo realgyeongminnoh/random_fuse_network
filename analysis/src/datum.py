@@ -19,7 +19,7 @@ class Datum:
         # model
         if not hasattr(failure.matrix, "val_cap"):
             self.model: str = "resistor"
-        elif hasattr(failure.array, "idxs_edge_to_edge_div_cap"):
+        elif hasattr(failure.array, "idxs_edge_vertical"):
             self.model: str = "resistor_capacitor"
         else:
             self.model: str = "resistor_capacitor_battery"
@@ -45,7 +45,7 @@ class Datum:
         return float(np.nanmax(np.abs(volts_edge_profile - (volts_cap_profile - volts_cond_profile))))
 
     def check_connectivity(self) -> int:
-        "must give 2; does not guarantee: [connectivity == 2] --> [crack from horizontal cut, not some island]"
+        "must give 2; does not guarantee: [connectivity == 2] --> [crack from horizontal cut, not some island]; new check_graph guarantees 2"
         if self.model == "resistor_capacitor_battery":
             return 2
         
@@ -60,7 +60,7 @@ class Datum:
         return nx.number_connected_components(graph)
 
     def check_num_cycle(self) -> int:
-        "must give 1"
+        "must give 1l new check_graph also guarantees 2 as well as previous DSU + parity method"
         if self.model == "resistor_capacitor_battery":
             return 1
         
@@ -133,11 +133,13 @@ class Datum:
         plt.show()
 
     def initialize_graph(
-        self, size_fig: float = 10.0, size_obj: float = 2.0, draw_dual: bool = False,
+        self, size_fig: float = 10.0, size_obj: float = 2.0, draw_dual: bool = False, draw_unalive: bool = False,
         save: bool = False, pad_inches: float = 0.7, transparent: bool = False
     ) -> None:
-        self.size_fig, self.size_obj, self.draw_dual, self.save, self.pad_inches, self.transparent = size_fig, size_obj, draw_dual, save, pad_inches, transparent
-
+        self.size_fig, self.size_obj, self.draw_dual, self.draw_unalive, self.save, self.pad_inches, self.transparent = size_fig, size_obj, draw_dual, draw_unalive, save, pad_inches, transparent
+        
+        if self.draw_dual:
+            self.array = Array(length=self.array.length, mode_analysis=True)
         length = self.array.length
         num_node = length ** 2 + length
         self.idxs_edge_pbc = (length + 1) + (2 * length) * np.arange(length - 1, dtype=np.int32)
@@ -204,7 +206,6 @@ class Datum:
             else:
                 self.pos_dual_pseudo = {(-length + i): (-0.5, i + 0.5) for i in range(length)} | pos_dual
 
-
         _generate_pos_dual(self, length)
 
         def _generate_cycles_pseudo(self) -> None:
@@ -233,12 +234,11 @@ class Datum:
 
                 for idx_layer_cycle in np.where(num_edge_per_layer == 0)[0]: # idxs_layer_cycle
                     self.num_cycle += 1
-                    array = Array(length) # edges from rc
-                    edges = np.array(array.edges)
+                    edges = np.array(self.array.edges)
 
                     edges_cycle = [(idx_node + (idx_layer_cycle * length), idx_node + length + (idx_layer_cycle * length)) for idx_node in range(length)]
                     idxs_edge_cycle = [int(np.where((edges[:,0] == u) & (edges[:,1] == v))[0][0]) for (u,v) in edges_cycle]
-                    cycle = [array.idxs_edge_to_edges_dual[idx_edge_broken] for idx_edge_broken in idxs_edge_cycle]
+                    cycle = [self.array.idxs_edge_to_edges_dual[idx_edge_broken] for idx_edge_broken in idxs_edge_cycle]
                     self.cycles_pseudo.append([(-(idx_face2 + 1) // length, idx_face1) if (idx_face2 - idx_face1 == length_minus_one) else (idx_face1, idx_face2) 
                         for idx_face1, idx_face2 in cycle]) # cycle pseudo for drawing          
                     
@@ -262,6 +262,8 @@ class Datum:
             colors_edge[idxs_edge_broken[-num_edge_broken_rainbow:]] = colors_edge_broken
         
         if self.model != "resistor_capacitor_battery":
+            if self.draw_unalive:
+                colors_edge[self.failure.idxs_edge_unalive] = np.array([0, 1, 0], dtype=np.float16)
             colors_edge = np.vstack([colors_edge[self.idxs_edge_pbc][::-1], np.delete(colors_edge, self.idxs_edge_pbc, axis=0)])
 
         # plot

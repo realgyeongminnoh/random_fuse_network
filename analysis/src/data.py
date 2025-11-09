@@ -15,12 +15,12 @@ from resistor_capacitor.src.failure import Failure
 
 class Data:
     "for multiple simulation (seed)"
-    def __init__(self, model: str, val_cap: str | None = None):
+    def __init__(self, model: str, val_cap: float | None = None):
         self.model = model
-        self.val_cap = val_cap
+        self.val_cap: float | None = float(val_cap) if val_cap is not None else None
         self.path_base = Path(__file__).resolve().parents[2]/ model / "data"
         if model != "resistor":
-            self.path_base = self.path_base / val_cap
+            self.path_base = self.path_base / str(val_cap)
 
         self.config_to_seeds, self.config_to_num_seed = self._get_configs()
     
@@ -115,7 +115,7 @@ class Data:
         return (length_global, width_global, seed) if nx.number_connected_components(graph) != 2 else None
     
     def check_connectivity(self) -> list[tuple[int, float, int]]:
-        "does not guarantee: [connectivity == 2] --> [crack from horizontal cut, not some island]"
+        "does not guarantee: [connectivity == 2] --> [crack from horizontal cut, not some island]; must be empty as new check_graph guarantees it"
         if self.model == "resistor_capacitor_battery": # rcb already passes this
             return []
         
@@ -152,7 +152,7 @@ class Data:
         return (length_global, width_global, seed) if len(nx.cycle_basis(graph_dual)) != 1 else None
 
     def check_num_cycle(self) -> list[tuple[int, float, int]]:
-        "guarantees: [cycle == 1] --> [crack from horizontal cut, not some island]"
+        "guarantees: [cycle == 1] --> [crack from horizontal cut, not some island]; must be empty as new check_graph guarantees it"
         if self.model == "resistor_capacitor_battery": # rcb already passes this
             return []
         

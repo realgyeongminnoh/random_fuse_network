@@ -48,7 +48,9 @@ def get_output_dir_common(args: argparse.Namespace) -> Path:
 
 def save_result(output_dir: Path, failure: Failure) -> None:
     np.save(output_dir / "idxs_edge_broken.npy", np.array(failure.idxs_edge_broken, dtype=np.int32))
+    np.save(output_dir / "idxs_edge_unalive.npy", np.array(failure.idxs_edge_unalive, dtype=np.int32))
     np.save(output_dir / "volts_ext.npy", np.array(failure.volts_ext, dtype=np.float64))
+    np.save(output_dir / "volts_cap_last.npy", np.abs(np.array(failure.volts_cap, dtype=np.float64)))
     if hasattr(failure, "volts_edge_profile"):
         np.save(output_dir / "volts_edge_profile.npy", np.array(failure.volts_edge_profile, dtype=np.float64))
         np.save(output_dir / "volts_cap_profile.npy", np.array(failure.volts_cap_profile, dtype=np.float64))

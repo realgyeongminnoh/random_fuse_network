@@ -13,22 +13,15 @@ class Failure:
         self.array: Array = array
         self.matrix: Matrix = matrix
         self.equation: Equation = equation
-        self.equation._lazy_init_failure(self)
         self.width = float(width)
         self.seed = int(seed)
         self.breaking_strengths: np.ndarray[np.float64] = self._generate_breaking_strengths()
 
-        self.degrees: np.ndarray[np.int32] = np.array([1] * array.length + [4] * array.num_node_mid + [1] * array.length, dtype=np.int32)
         self.volts_edge: np.ndarray[np.float64] = np.empty(self.array.num_edge, dtype=np.float64)
         self.volts_cap: np.ndarray[np.float64] = np.empty(self.array.num_edge, dtype=np.float64)
         self.idxs_edge_broken: list[int] = []
-        self.idxs_edge_leaf: list[int] = []
-        self.idxs_edge_island: list[int] = []
+        self.idxs_edge_unalive: list[int] = []
         self.volts_ext: list[float] = []
-
-        self.parents: np.ndarray[np.int32] = self.array.parents.copy()
-        self.sizes: np.ndarray[np.int32] = self.array.sizes.copy()
-        self.parities: np.ndarray[np.uint8] = self.array.parities.copy()
 
         if save_volts_profile:
             self.volts_edge_profile: list[np.ndarray[np.float64]] = []
@@ -56,6 +49,8 @@ class Failure:
 
             self._compute_volts_cond_dynamic = self._no_op0
             self._append_volts_cond_profile_dynamic = self._no_op0
+
+        self.equation._lazy_init_failure(self)
 
     def _append_volts_edge_profile_scale(self, scaling_factor):
         self.volts_edge_profile.append(self.volts_edge_signed.copy().__imul__(scaling_factor))
@@ -164,46 +159,10 @@ class Failure:
             div_comb[idx_node2_new, idx_node2_new] -= val_cap_reciprocal
             div_comb[idx_node1_new, idx_node2_new] += val_cap_reciprocal
             div_comb[idx_node2_new, idx_node1_new] += val_cap_reciprocal
-
-    def _find_edge_broken_leaf_proof(self, quantities):
-        degrees = self.degrees
-        idx_edge_broken = int(np.argmin(quantities))
-        idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
-        degrees[idx_node1] -= 1
-        degrees[idx_node2] -= 1
-
-        if idx_node1 < self.array.length:
-            if degrees[idx_node2] == 0:
-                degrees[idx_node1] += 1
-                degrees[idx_node2] += 1
-                quantities[idx_edge_broken] = np.inf
-                self.idxs_edge_leaf.append(idx_edge_broken)
-                return self._find_edge_broken_leaf_proof(quantities)
-            return idx_edge_broken
-        
-        if idx_node2 > self.array.idx_node_bot_first_minus_one:
-            if degrees[idx_node1] == 0:
-                degrees[idx_node1] += 1
-                degrees[idx_node2] += 1
-                quantities[idx_edge_broken] = np.inf
-                self.idxs_edge_leaf.append(idx_edge_broken)
-                return self._find_edge_broken_leaf_proof(quantities)
-            return idx_edge_broken
-        
-        if degrees[idx_node1] * degrees[idx_node2] == 0:
-            degrees[idx_node1] += 1
-            degrees[idx_node2] += 1
-            quantities[idx_edge_broken] = np.inf
-            self.idxs_edge_leaf.append(idx_edge_broken)
-            return self._find_edge_broken_leaf_proof(quantities)
-        return idx_edge_broken
     
     def break_edge_init(self) -> None:
         self._compute_volts_edge_init()
         idx_edge_broken = int(np.argmin(self.breaking_strengths / self.volts_edge))
-        idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
-        self.degrees[idx_node1] -= 1
-        self.degrees[idx_node2] -= 1
 
         self._update_matrix(idx_edge_broken)
         self.idxs_edge_broken.append(idx_edge_broken)
@@ -224,27 +183,19 @@ class Failure:
         self._compute_volts_edge()
         stresses_edge_neg = self.breaking_strengths - self.volts_edge
         stresses_edge_neg[self.idxs_edge_broken] = np.inf
-        stresses_edge_neg[self.idxs_edge_leaf] = np.inf
-        stresses_edge_neg[self.idxs_edge_island] = np.inf
-        idx_edge_broken = self._find_edge_broken_leaf_proof(stresses_edge_neg)
+        stresses_edge_neg[self.idxs_edge_unalive] = np.inf
+        idx_edge_broken = int(np.argmin(stresses_edge_neg))
 
         if stresses_edge_neg[idx_edge_broken] <= 0:
             self._update_matrix(idx_edge_broken)
             self.idxs_edge_broken.append(idx_edge_broken)
-
-            self.equation.volts_node_div_prev = None
             self._append_volts_edge_profile_dynamic()
 
         else:
-            idx_node1, idx_node2 = self.array.edges[idx_edge_broken]
-            self.degrees[idx_node1] += 1
-            self.degrees[idx_node2] += 1
-
             factors_scaling = self.breaking_strengths / self.volts_edge
             factors_scaling[self.idxs_edge_broken] = np.inf
-            factors_scaling[self.idxs_edge_leaf] = np.inf
-            factors_scaling[self.idxs_edge_island] = np.inf
-            idx_edge_broken = self._find_edge_broken_leaf_proof(factors_scaling)
+            factors_scaling[self.idxs_edge_unalive] = np.inf
+            idx_edge_broken = int(np.argmin(factors_scaling))
             factor_scaling = factors_scaling[idx_edge_broken]
 
             self._update_matrix(idx_edge_broken)
@@ -252,7 +203,6 @@ class Failure:
 
             self._compute_volts_cap()
             self.equation.volt_ext *= factor_scaling
-            self.equation.volts_node_div_prev = self.equation.volts_node_div.copy()
             self.equation.volts_node_div *= factor_scaling
             self._charge_conservation()
             self._append_volts_edge_profile_scale_dynamic(factor_scaling)
@@ -262,38 +212,3 @@ class Failure:
         self._compute_volts_cond_dynamic()
         self._append_volts_cond_profile_dynamic()
         self.volts_ext.append(float(self.equation.volt_ext))
-
-    def _dsu_find(self, idx_face: int) -> tuple[int, np.uint8]:
-        if self.parents[idx_face] == idx_face: # root
-            return idx_face, 0
-        root, parity = self._dsu_find(int(self.parents[idx_face])) # recursion scope until root is found
-
-        # recursion unwind ( per face along the path(root(initial face) -> initial face) )
-        self.parents[idx_face] = root
-        self.parities[idx_face] ^= parity
-        return root, self.parities[idx_face] # return to-root parity of initial face
-
-    def _dsu_union(self, root_face1: int, root_face2: int, xor_triple: np.uint8) -> None:
-        if self.sizes[root_face1] > self.sizes[root_face2]:
-            root_face1, root_face2 = root_face2, root_face1 # size(root(f1)) <= size(root(f2))
-            
-        self.parents[root_face1] = root_face2 # parent(root(f1)) = root(f2)
-        self.sizes[root_face2] += self.sizes[root_face1]
-        self.parities[root_face1] = xor_triple
-
-    def _dsu_update(self, idx_edge_broken: int) -> int:
-        idx_face1, idx_face2 = self.array.idxs_edge_to_edges_dual[idx_edge_broken] # dual(e_b) = (f1, f2)
-        parity_edge_broken = self.array.parities_edge_broken[idx_edge_broken]
-
-        root_face1, parity_face1 = self._dsu_find(idx_face1)
-        root_face2, parity_face2 = self._dsu_find(idx_face2)
-
-        if root_face1 != root_face2: # root(f1) =/= root(f2)
-            # parity(f1) ^ parity(root(f1) -> root(f2)) ^ parity(f2) [DSU TREE] == parity(edge_broken(f1->f2)) [DUAL GRAPH]
-            self._dsu_union(root_face1, root_face2, parity_face1 ^ parity_face2 ^ parity_edge_broken)
-            return 0 # no cycle
-
-        # root(f1) = root(f2)
-        if parity_face1 ^ parity_face2 ^ parity_edge_broken == 1:
-            return 1 # termination cycle # odd #(seam crossing dual edges) in the cycle path
-        return 2 # island cycle # even #(seam crossing dual edges) in the cycle path

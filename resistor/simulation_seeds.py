@@ -46,6 +46,7 @@ def get_output_dir_common(args: argparse.Namespace) -> Path:
 
 def save_result(output_dir: Path, failure: Failure) -> None:
     np.save(output_dir / "idxs_edge_broken.npy", np.array(failure.idxs_edge_broken, dtype=np.int32))
+    np.save(output_dir / "idxs_edge_unalive.npy", np.array(failure.idxs_edge_unalive, dtype=np.int32))
     np.save(output_dir / "volts_ext.npy", np.array(failure.volts_ext, dtype=np.float64))
     if hasattr(failure, "volts_edge_profile"):
         np.save(output_dir / "volts_edge_profile.npy", np.array(failure.volts_edge_profile, dtype=np.float64))
@@ -54,7 +55,7 @@ def save_result(output_dir: Path, failure: Failure) -> None:
 def parallel_job(seed: int) -> None:
     # initialization - seed-specific
     matrix = Matrix(matrix_init=matrix_init_global, array=None)
-    equation = Equation(array=array_global, matrix=matrix, save_volts_profile=save_volts_profile_global)
+    equation = Equation(array=array_global, matrix=matrix)
     failure = Failure(array=array_global, matrix=matrix, equation=equation, width=width_global, seed=seed, save_volts_profile=save_volts_profile_global)
 
     # breakdown simulation

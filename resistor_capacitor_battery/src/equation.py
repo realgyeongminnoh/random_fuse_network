@@ -35,7 +35,10 @@ class Equation:
         """
         graph-based termination condition (network breakdown) check
         """
-        return ~np.any(self.failure.num_edge_per_layer == 0)
+        if np.any(self.failure.num_edge_per_layer == 0):
+            self.failure._compute_volts_cap() # LAST COMPUTE VOLTS CAP
+            return False
+        return True
 
     def solve(self) -> None:
         self.volts_node_div = self.matrix.div_cap @ self.volts_node_div
