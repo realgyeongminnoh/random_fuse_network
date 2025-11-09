@@ -5,8 +5,6 @@ from scipy.sparse.linalg import spsolve, splu
 from .array import Array
 from .matrix import Matrix
 
-warnings.filterwarnings("error") # non-dual-graph-based memory-efficient solution for "island" issue (2> disconnected components of primal graph) but i was overly protective and its never happening after KCL equations fix
-
 
 class Equation:
     def __init__(self, array: Array, matrix: Matrix):
