@@ -18,8 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed_max", "--smax", type=int, required=True, help="Largest Seed Number of Random Uniform Distribution of Threshold Voltage Drops")
     parser.add_argument("--save", action="store_true", help="Collect and Save volts_edge, volts_cap, and volts_cond for All t")
     parser.add_argument("--cpu", type=int, required=False, default=15, help="Force a Fixed Number of CPU Processors; default = 15 or Your Max")
-    parser.add_argument("--cap", type=float, required=False, default=1.0, help="Set Capacitance of All Capacitors; Default = 1.0")
-    parser.add_argument("--time", type=float, required=False, default=1.0, help="Set Time Step; Default = 1.0")
+    parser.add_argument("--cap", type=float, required=False, default=1.0, help="Set (Effective; Δt=1) Capacitance of All Capacitors; Default = 1.0")
     return parser.parse_args()
 
 
@@ -36,12 +35,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError(f"1 <= cpu")
     if not (0 <= args.cap):
         raise ValueError("cap >= 0")
-    if not (0 < args.time):
-        raise ValueError("time > 0")
 
 
 def get_output_dir_common(args: argparse.Namespace) -> Path:
-    output_dir_common = Path(__file__).resolve().parent / "data" / f"{args.cap}_{args.time}" / str(args.length) / str(args.width)
+    output_dir_common = Path(__file__).resolve().parent / "data" / str(args.cap) / str(args.length) / str(args.width)
     output_dir_common.mkdir(parents=True, exist_ok=True)
 
     for seed in range(args.seed_min, args.seed_max + 1):
@@ -72,31 +69,30 @@ def parallel_job(seed: int) -> None:
     break_edge()
 
     # 2nd ~ (length)th bond breaking [t=1 ~ t=(length-1)]
+    check_graph = equation.check_graph
     solve = equation.solve
-    solve_r = equation.solve_r_mmd
     break_edge = failure.break_edge
     for _ in range(length_global - 1):
-        solve_r()
+        check_graph()
         solve()
         break_edge()
 
     # (length+1)th ~ (macroscopic failure) bond breaking [t=(length) ~ (total number of broken bonds-1)]
-    solve_r = equation.solve_r_amd
-    while solve_r():
+    while check_graph():
         solve()
         break_edge()
 
     save_result(output_dir_common_global / str(seed), failure)
 
 
-def main(length: int, width: float, seed_min: int, seed_max: int, save_volts_profile: bool, cpu: int, val_cap: float, time_step: float) -> None:
+def main(length: int, width: float, seed_min: int, seed_max: int, save_volts_profile: bool, cpu: int, val_cap: float) -> None:
     global length_global, width_global, save_volts_profile_global
     length_global, width_global, save_volts_profile_global = length, width, save_volts_profile
 
     # initialization - shared across seeds
     global array_global, matrix_init_global
     array_global = Array(length=length, mode_analysis=False)
-    matrix_init_global = Matrix(matrix_init=None, array=array_global, val_cap=val_cap, time_step=time_step)
+    matrix_init_global = Matrix(matrix_init=None, array=array_global, val_cap=val_cap)
 
     # parallelization
     max_workers = (seed_max - seed_min + 1) if (seed_max - seed_min + 1) < cpu else cpu
@@ -112,5 +108,5 @@ if __name__=="__main__":
     validate_args(args)
     output_dir_common_global = get_output_dir_common(args)
 
-    main(args.length, args.width, args.seed_min, args.seed_max, args.save, args.cpu, args.cap, args.time)
+    main(args.length, args.width, args.seed_min, args.seed_max, args.save, args.cpu, args.cap)
     raise SystemExit(0)

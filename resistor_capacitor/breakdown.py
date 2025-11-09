@@ -9,13 +9,12 @@ def breakdown(
     width: float,
     seed: int,
     val_cap: float,
-    time_step: float,
 ) -> tuple[Array, Matrix, Equation, Failure]:
     "used for analysis"
     
     # initialization
     array = Array(length=length, mode_analysis=True)
-    matrix = Matrix(matrix_init=None, array=array, val_cap=val_cap, time_step=time_step)
+    matrix = Matrix(matrix_init=None, array=array, val_cap=val_cap)
     equation = Equation(array=array, matrix=matrix, save_volts_profile=True)
     failure = Failure(array=array, matrix=matrix, equation=equation, width=width, seed=seed, save_volts_profile=True)
 
@@ -27,17 +26,16 @@ def breakdown(
     break_edge()
 
     # 2nd ~ (length)th bond breaking [t=1 ~ t=(length-1)]
+    check_graph = equation.check_graph
     solve = equation.solve
-    solve_r = equation.solve_r_mmd
     break_edge = failure.break_edge
     for _ in range(array.length - 1):
-        solve_r()
+        check_graph()
         solve()
         break_edge()
 
     # (length+1)th ~ (macroscopic failure) bond breaking [t=(length) ~ (total number of broken bonds-1)]
-    solve_r = equation.solve_r_amd
-    while solve_r():
+    while check_graph():
         solve()
         break_edge()
 

@@ -26,6 +26,10 @@ class Failure:
         self.idxs_edge_island: list[int] = []
         self.volts_ext: list[float] = []
 
+        self.parents: np.ndarray[np.int32] = self.array.parents.copy()
+        self.sizes: np.ndarray[np.int32] = self.array.sizes.copy()
+        self.parities: np.ndarray[np.uint8] = self.array.parities.copy()
+
         if save_volts_profile:
             self.volts_edge_profile: list[np.ndarray[np.float64]] = []
             self.volts_edge_signed: np.ndarray[np.float64] = np.empty(self.array.num_edge, dtype=np.float64)
@@ -150,34 +154,16 @@ class Failure:
         idx_node1, idx_node2 = array.edges_div_cond[idx_edge_broken]
         idx_node1_new, idx_node2_new = idx_node1 - array.length, idx_node2 - array.length_double
         div_comb = self.matrix.div_comb
-        time_step = self.matrix.time_step
+        val_cap_reciprocal = self.matrix.val_cap_reciprocal
 
         if array.idx_node_bot_first_minus_one < idx_node1:
-            div_comb[array.num_node_div_mid, idx_node2_new] -= time_step
-            div_comb[idx_node2_new, idx_node2_new] -= time_step
+            div_comb[array.num_node_div_mid, idx_node2_new] -= val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node2_new] -= val_cap_reciprocal
         else:
-            div_comb[idx_node1_new, idx_node1_new] -= time_step
-            div_comb[idx_node2_new, idx_node2_new] -= time_step
-            div_comb[idx_node1_new, idx_node2_new] += time_step
-            div_comb[idx_node2_new, idx_node1_new] += time_step
-
-        idx_node1, idx_node2 = array.edges[idx_edge_broken]
-        idx_node1_new, idx_node2_new = idx_node1 - array.length + 1, idx_node2 - array.length + 1
-        cond = self.matrix.cond
-
-        if idx_node2_new <= array.num_node_mid:
-            if idx_node1_new > 0:
-                cond[idx_node1_new, idx_node1_new] -= 1.0
-                cond[idx_node2_new, idx_node2_new] -= 1.0
-                cond[idx_node1_new, idx_node2_new] += 1.0
-                cond[idx_node2_new, idx_node1_new] += 1.0
-            else:
-                cond[0, 0] -= 1.0
-                cond[idx_node2_new, idx_node2_new] -= 1.0
-                cond[0, idx_node2_new] += 1.0
-                cond[idx_node2_new, 0] += 1.0
-        else:
-            cond[idx_node1_new, idx_node1_new] -= 1.0
+            div_comb[idx_node1_new, idx_node1_new] -= val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node2_new] -= val_cap_reciprocal
+            div_comb[idx_node1_new, idx_node2_new] += val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node1_new] += val_cap_reciprocal
 
     def _find_edge_broken_leaf_proof(self, quantities):
         degrees = self.degrees
@@ -276,3 +262,38 @@ class Failure:
         self._compute_volts_cond_dynamic()
         self._append_volts_cond_profile_dynamic()
         self.volts_ext.append(float(self.equation.volt_ext))
+
+    def _dsu_find(self, idx_face: int) -> tuple[int, np.uint8]:
+        if self.parents[idx_face] == idx_face: # root
+            return idx_face, 0
+        root, parity = self._dsu_find(int(self.parents[idx_face])) # recursion scope until root is found
+
+        # recursion unwind ( per face along the path(root(initial face) -> initial face) )
+        self.parents[idx_face] = root
+        self.parities[idx_face] ^= parity
+        return root, self.parities[idx_face] # return to-root parity of initial face
+
+    def _dsu_union(self, root_face1: int, root_face2: int, xor_triple: np.uint8) -> None:
+        if self.sizes[root_face1] > self.sizes[root_face2]:
+            root_face1, root_face2 = root_face2, root_face1 # size(root(f1)) <= size(root(f2))
+            
+        self.parents[root_face1] = root_face2 # parent(root(f1)) = root(f2)
+        self.sizes[root_face2] += self.sizes[root_face1]
+        self.parities[root_face1] = xor_triple
+
+    def _dsu_update(self, idx_edge_broken: int) -> int:
+        idx_face1, idx_face2 = self.array.idxs_edge_to_edges_dual[idx_edge_broken] # dual(e_b) = (f1, f2)
+        parity_edge_broken = self.array.parities_edge_broken[idx_edge_broken]
+
+        root_face1, parity_face1 = self._dsu_find(idx_face1)
+        root_face2, parity_face2 = self._dsu_find(idx_face2)
+
+        if root_face1 != root_face2: # root(f1) =/= root(f2)
+            # parity(f1) ^ parity(root(f1) -> root(f2)) ^ parity(f2) [DSU TREE] == parity(edge_broken(f1->f2)) [DUAL GRAPH]
+            self._dsu_union(root_face1, root_face2, parity_face1 ^ parity_face2 ^ parity_edge_broken)
+            return 0 # no cycle
+
+        # root(f1) = root(f2)
+        if parity_face1 ^ parity_face2 ^ parity_edge_broken == 1:
+            return 1 # termination cycle # odd #(seam crossing dual edges) in the cycle path
+        return 2 # island cycle # even #(seam crossing dual edges) in the cycle path

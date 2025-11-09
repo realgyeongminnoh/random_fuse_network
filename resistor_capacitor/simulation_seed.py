@@ -14,8 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", "--w", type=float, required=True, help="Width of Random Uniform Distribution of Threshold Voltage Drops ∈ [0, 2]")
     parser.add_argument("--seed", "--s", type=int, required=True, help="Seed Number of Random Uniform Distribution of Threshold Voltage Drops")
     parser.add_argument("--save", action="store_true", help="Collect and Save volts_edge, volts_cap, and volts_cond for All t")
-    parser.add_argument("--cap", type=float, required=False, default=1.0, help="Set Capacitance of All Capacitors; Default = 1.0")
-    parser.add_argument("--time", type=float, required=False, default=1.0, help="Set Time Step; Default = 1.0")
+    parser.add_argument("--cap", type=float, required=False, default=1.0, help="Set (Effective; Δt=1) Capacitance of All Capacitors; Default = 1.0")
     return parser.parse_args()
 
 
@@ -28,12 +27,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("seed >= 0")
     if not (0 <= args.cap):
         raise ValueError("cap >= 0")
-    if not (0 < args.time):
-        raise ValueError("time > 0")
 
 
 def get_output_dir(args: argparse.Namespace) -> Path | None:
-    output_dir = Path(__file__).resolve().parent / "data" / f"{args.cap}_{args.time}" / str(args.length) / str(args.width) / str(args.seed)
+    output_dir = Path(__file__).resolve().parent / "data" / str(args.cap) / str(args.length) / str(args.width) / str(args.seed)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "volts_ext.npy").exists():
@@ -55,10 +52,10 @@ def save_result(output_dir: Path, failure: Failure) -> None:
         np.save(output_dir / "volts_cond_profile.npy", np.array(failure.volts_cond_profile, dtype=np.float64))
 
 
-def main(length: int, width: float, seed: int, save_volts_profile: bool, val_cap: float, time_step: float) -> None:
+def main(length: int, width: float, seed: int, save_volts_profile: bool, val_cap: float) -> None:
     # initialization
     array = Array(length=length, mode_analysis=False)
-    matrix = Matrix(matrix_init=None, array=array, val_cap=val_cap, time_step=time_step)
+    matrix = Matrix(matrix_init=None, array=array, val_cap=val_cap)
     equation = Equation(array=array, matrix=matrix, save_volts_profile=save_volts_profile)
     failure = Failure(array=array, matrix=matrix, equation=equation, width=width, seed=seed, save_volts_profile=save_volts_profile)
     
@@ -70,17 +67,16 @@ def main(length: int, width: float, seed: int, save_volts_profile: bool, val_cap
     break_edge()
 
     # 2nd ~ (length)th bond breaking [t=1 ~ t=(length-1)]
+    check_graph = equation.check_graph
     solve = equation.solve
-    solve_r = equation.solve_r_mmd
     break_edge = failure.break_edge
-    for _ in range(array.length - 1):
-        solve_r()
+    for _ in range(length - 1):
+        check_graph()
         solve()
         break_edge()
 
     # (length+1)th ~ (macroscopic failure) bond breaking [t=(length) ~ (total number of broken bonds-1)]
-    solve_r = equation.solve_r_amd
-    while solve_r():
+    while check_graph():
         solve()
         break_edge()
 
@@ -93,5 +89,5 @@ if __name__=="__main__":
     output_dir_global = get_output_dir(args)
     if output_dir_global is None: raise SystemExit("[simulation_seed.py] the result already exists")
 
-    main(args.length, args.width, args.seed, args.save, args.cap, args.time)
+    main(args.length, args.width, args.seed, args.save, args.cap)
     raise SystemExit(0)

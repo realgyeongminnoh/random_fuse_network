@@ -15,7 +15,6 @@ class Equation:
         self.failure = None
 
         self.volt_ext: float = 1.0
-        self.vec_rhs: np.ndarray[np.float64] = np.zeros(self.matrix.size_cond, dtype=np.float64)
         self.volts_node_div: np.ndarray[np.float64] = np.empty(self.matrix.size_div_comb, dtype=np.float64)
         self.volts_node_div_prev: np.ndarray[np.float64] | None = None
 
@@ -48,34 +47,16 @@ class Equation:
         idx_node1, idx_node2 = array.edges_div_cond[idx_edge_island]
         idx_node1_new, idx_node2_new = idx_node1 - array.length, idx_node2 - array.length_double
         div_comb = self.matrix.div_comb
-        time_step = self.matrix.time_step
+        val_cap_reciprocal = self.matrix.val_cap_reciprocal
 
         if array.idx_node_bot_first_minus_one < idx_node1:
-            div_comb[array.num_node_div_mid, idx_node2_new] += time_step
-            div_comb[idx_node2_new, idx_node2_new] += time_step
+            div_comb[array.num_node_div_mid, idx_node2_new] += val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node2_new] += val_cap_reciprocal
         else:
-            div_comb[idx_node1_new, idx_node1_new] += time_step
-            div_comb[idx_node2_new, idx_node2_new] += time_step
-            div_comb[idx_node1_new, idx_node2_new] -= time_step
-            div_comb[idx_node2_new, idx_node1_new] -= time_step
-
-        idx_node1, idx_node2 = array.edges[idx_edge_island]
-        idx_node1_new, idx_node2_new = idx_node1 - array.length + 1, idx_node2 - array.length + 1
-        cond = self.matrix.cond
-
-        if idx_node2_new <= array.num_node_mid:
-            if idx_node1_new > 0:
-                cond[idx_node1_new, idx_node1_new] += 1.0
-                cond[idx_node2_new, idx_node2_new] += 1.0
-                cond[idx_node1_new, idx_node2_new] -= 1.0
-                cond[idx_node2_new, idx_node1_new] -= 1.0
-            else:
-                cond[0, 0] += 1.0
-                cond[idx_node2_new, idx_node2_new] += 1.0
-                cond[0, idx_node2_new] -= 1.0
-                cond[idx_node2_new, 0] -= 1.0
-        else:
-            cond[idx_node1_new, idx_node1_new] += 1.0
+            div_comb[idx_node1_new, idx_node1_new] += val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node2_new] += val_cap_reciprocal
+            div_comb[idx_node1_new, idx_node2_new] -= val_cap_reciprocal
+            div_comb[idx_node2_new, idx_node1_new] -= val_cap_reciprocal
 
     def solve_init(self) -> None:
         length = self.array.length
@@ -90,14 +71,20 @@ class Equation:
         for idx_node1, idx_node2 in self.array.edges_div_cap[length:]:
             volts_node_div[idx_node2 - length_double] = volts_node_div[idx_node1 - length]
 
-    def solve_r_mmd(self) -> None:
-        try:
-            self.vec_rhs[-1] = self.volt_ext
-            splu(self.matrix.cond, permc_spec="MMD_AT_PLUS_A")
-        except:
+
+    def check_graph(self) -> bool:
+        while True:
+            idx_edge_broken = self.failure.idxs_edge_broken[-1]
+            flag = self.failure._dsu_update(idx_edge_broken)
+            if flag == 0: # no cycle
+                return True
+            if flag == 1: # termination cycle
+                return False
+
+            # island cycle
             idx_edge_island = self.failure.idxs_edge_broken.pop()
             self.failure.idxs_edge_island.append(idx_edge_island)
-            
+
             idx_node1, idx_node2 = self.array.edges[idx_edge_island]
             self.failure.degrees[idx_node1] += 1
             self.failure.degrees[idx_node2] += 1
@@ -108,39 +95,11 @@ class Equation:
             if self.volts_node_div_prev is not None:
                 self.volts_node_div[:] = self.volts_node_div_prev
                 self.volts_node_div_prev = None
-                
+
             self._pop_volts_edge_profile_dynamic()
             self._pop_volts_cap_profile_dynamic()
             self._pop_volts_cond_profile_dynamic()
-
             self.failure.break_edge()
-            self.solve_r_mmd()
-    
-    def solve_r_amd(self) -> bool:
-        try:
-            self.vec_rhs[-1] = self.volt_ext
-            return np.abs(spsolve(self.matrix.cond, self.vec_rhs, permc_spec="COLAMD")[-1]) > 1e-5
-        except:
-            idx_edge_island = self.failure.idxs_edge_broken.pop()
-            self.failure.idxs_edge_island.append(idx_edge_island)
-            
-            idx_node1, idx_node2 = self.array.edges[idx_edge_island]
-            self.failure.degrees[idx_node1] += 1
-            self.failure.degrees[idx_node2] += 1
-
-            self._undo_update_matrix(idx_edge_island)
-            self.failure.volts_ext.pop()
-            self.volt_ext = self.failure.volts_ext[-1]
-            if self.volts_node_div_prev is not None:
-                self.volts_node_div[:] = self.volts_node_div_prev
-                self.volts_node_div_prev = None
-                
-            self._pop_volts_edge_profile_dynamic()
-            self._pop_volts_cap_profile_dynamic()
-            self._pop_volts_cond_profile_dynamic()
-
-            self.failure.break_edge()
-            return self.solve_r_amd()
 
     def solve(self) -> None:
         self.volts_node_div = self.matrix.div_cap @ self.volts_node_div
