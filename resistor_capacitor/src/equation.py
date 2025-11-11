@@ -124,8 +124,8 @@ class Equation:
         low = self._cg_low
         parent = self._cg_parent; parent.fill(-1)
         parent_edge = self._cg_parent_edge; parent_edge.fill(-1)
-        tin = self._cg_tin
-        tout = self._cg_tout
+        tin = self._cg_tin; tin.fill(-1)
+        tout = self._cg_tout; tout.fill(-1)
         tops_sub = self._cg_tops_sub
         bots_sub = self._cg_bots_sub
 

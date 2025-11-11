@@ -60,7 +60,7 @@ def save_result(output_dir: Path, failure: Failure) -> None:
 def parallel_job(seed: int) -> None:
     # initialization - seed-specific
     matrix = Matrix(matrix_init=matrix_init_global, array=None)
-    equation = Equation(array=array_global, matrix=matrix, save_volts_profile=save_volts_profile_global)
+    equation = Equation(array=array_global, matrix=matrix)
     failure = Failure(array=array_global, matrix=matrix, equation=equation, width=width_global, seed=seed, save_volts_profile=save_volts_profile_global)
     
     # breakdown simulation

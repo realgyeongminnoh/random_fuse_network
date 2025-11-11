@@ -27,7 +27,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def get_output_dir(args: argparse.Namespace) -> Path | None:
-    output_dir = Path(__file__).resolve().parent / "data" / str(args.length) / str(args.width) / str(args.seed)
+    output_dir = Path(__file__).resolve().parent / "data" / "0.0" / str(args.length) / str(args.width) / str(args.seed)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if (output_dir / "idxs_edge_broken.npy").exists() and (output_dir / "idxs_edge_unalive").exists() and (output_dir / "volts_ext.npy").exists():
